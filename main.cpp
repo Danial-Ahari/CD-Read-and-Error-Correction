@@ -42,7 +42,8 @@
 //
 //Usage: readcd <drive letter>
 //*************************************************************
-#include <stdio.h>  
+#include <stdio.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <cassert>
 #include <map>
@@ -83,7 +84,7 @@ void make_scrambled_table(void);
 //prototypes
 int OpenVolume(char* cdDeviceFile);
 bool CloseVolume(int hVolume);
-bool ReadCD(char* cdDeviceFile);
+bool ReadCD(int hVolume);
 
 //** Defines taken from ntddscsi.h in MS Windows DDK CD
 #define SCSI_IOCTL_DATA_OUT             0 //Give data to SCSI device (e.g. for writing)
@@ -126,7 +127,7 @@ typedef struct _SCSI_PASS_THROUGH_DIRECT {
 //** End of defines taken from ntddscsi.h from MS Windows DDK CD
 
 //Global variables
-SCSI_PASS_THROUGH_DIRECT sptd;
+struct sg_io_hdr sptd;
 uint8_t DataBuf[2352 * numToRead]; //buffer for holding sector data from drive
 uint8_t SenseBuf[255]; //buffer for holding sense data from drive (not used in this example)
 int hVolume;
@@ -142,7 +143,7 @@ int OpenVolume(char* cdDeviceFile)
    listed as comments.
 */
 {
-	int fd = open(cdDeviceFile, O_RDONLY | O_NONBLOCK);
+	int hVolume = open(cdDeviceFile, O_RDONLY | O_NONBLOCK);
 	
 	return hVolume;
 
@@ -150,7 +151,7 @@ int OpenVolume(char* cdDeviceFile)
 
 bool CloseVolume(int hVolume)
 {
-	return fclose(hVolume);
+	return close(hVolume);
 }
 
 //From sarami's EccEdc (EccEdc.cpp)
@@ -177,7 +178,7 @@ bool PassToBuffer(long first, long last)
 		if (SectorData[0x000] == 0x00 && // sync (12 bytes)
 			SectorData[0x001] == 0xFF && SectorData[0x002] == 0xFF && SectorData[0x003] == 0xFF && SectorData[0x004] == 0xFF &&
 			SectorData[0x005] == 0xFF && SectorData[0x006] == 0xFF && SectorData[0x007] == 0xFF && SectorData[0x008] == 0xFF &&
-			SectorData[0x009] == 0xFF && SectorData[0x00A] == 0xFF && SectorData[0x00B] == 0x00)
+			SectorData[0x009] == 0xFF && SectorData[0x00A] == 0xFF && SectorData[0x00B] == 0x00 )
 		{
 			//Now descramble the sector enough to check the LBA against what we expect
 			uint8_t TempBufUnscrambled[16];
@@ -246,7 +247,7 @@ bool GetFromBuffer(long sectorNo)
 	//printf("Result:\n %d\n", ecmify(NewBufUnscrambled));
 }
 
-bool ReadCD(char* cdDeviceFile, bool mode = false)
+bool ReadCD(int hVolume, bool mode = false)
 /*
 	1. Set up the sptd values.
 	2. Set up the CDB for MMC readcd (CDB12) command.
@@ -255,136 +256,68 @@ bool ReadCD(char* cdDeviceFile, bool mode = false)
 {
 	bool success;
 	long sectorM2 = sector - 2;
-
+	uint32_t dwBytesReturned;
 	//Don't read if it's in the buffer
 	if (GetFromBuffer(sector)) return true;
 
 	if (hVolume != -1)
 	{
-	
-		struct sg_io_hdr sgio;
-		unsigned char buf[2352];
-		unsigned char sense[128];
-
-		sgio.interface_id = 'S';
-		sgio.dxfer_direction = SG_DXFER_FROM_DEV;
-		sgio.cmd_len = 12;
-		sgio.dxferp = buf;
-		sgio.dxfer_len = sizeof(buf);
-		sgio.sbp = sense;
-		sgio.mx_sb_len = sizeof(sense);
-		sgio.timeout = 30000;
-		/*sptd.Length = sizeof(sptd);
-		sptd.PathId = 0;   //SCSI card ID will be filled in automatically
-		sptd.TargetId = 0; //SCSI target ID will also be filled in
-		sptd.Lun = 0;      //SCSI lun ID will also be filled in
-		sptd.CdbLength = 12; //CDB size is 12 for ReadCD D8 command
-		sptd.SenseInfoLength = 0; //Don't return any sense data
-		sptd.DataIn = SCSI_IOCTL_DATA_IN; //There will be data from drive
-		sptd.DataTransferLength = 2352 * numToRead; //Size of data - in this case 1 sector of data
-		sptd.TimeOutValue = 15;  //SCSI timeout value (60 seconds - maybe it should be longer)
-		sptd.DataBuffer = (void*) & (DataBuf);
-		sptd.SenseInfoOffset = 0; */
+		unsigned char CMD[15];
+		sptd.interface_id = 'S';
+		sptd.sbp = NULL;
+		sptd.mx_sb_len = 0;
+		sptd.dxfer_len = 2352 * numToRead;
+		sptd.dxfer_direction = SG_DXFER_FROM_DEV;
+		sptd.dxferp = (void*) &DataBuf; 
+		sptd.timeout = 60000;
 
 		if (!mode) //if we're not using 0xbe mode
 		{
-			//CDB with values for ReadCD CDB12 command.  The values were taken from MMC1 draft paper.
-			/*sptd.Cdb[0] = 0xBE;  //Code for ReadCD CDB12 command
-			sptd.Cdb[1] = 0;
-			sptd.Cdb[2] = 0;  //Most significant byte of:
-			sptd.Cdb[3] = 0;  //3rd byte of:
-			sptd.Cdb[4] = 0;  //2nd byte of:
-			sptd.Cdb[5] = 0;  //Least sig byte of LBA sector no. to read from CD
-			sptd.Cdb[6] = 0;  //Most significant byte of:
-			sptd.Cdb[7] = 0;  //Middle byte of:
-			sptd.Cdb[8] = 1;  //Least sig byte of no. of sectors to read from CD
-			sptd.Cdb[9] = 0xF8;  //Raw read, 2352 bytes per sector
-			sptd.Cdb[10] = 0;
-			sptd.Cdb[11] = 0;
-			sptd.Cdb[12] = 0;
-			sptd.Cdb[13] = 0;
-			sptd.Cdb[14] = 0;
-			sptd.Cdb[15] = 0;*/
-			/*sptd.Cdb[0] = 0xD8;  //Code for ReadCDDA command
-			sptd.Cdb[1] = 0;//8; //FUA?*/
-			sgio.cmdp[0] = 0xD8;  //Code for ReadCDDA command
-			sgio.cmdp[1] = 0;//8; //FUA?
-			//sptd.Cdb[2] = 0;  //Most significant byte of:
-			//sptd.Cdb[3] = 0;  //3rd byte of:
-			//sptd.Cdb[4] = 0;  //2nd byte of:
-			//sptd.Cdb[5] = 0;  //Least sig byte of LBA sector no. to read from CD
-//			sptd.Cdb[2] = (uint8_t)(sectorM2 >> 24);				// Set Start Sector 
-//			sptd.Cdb[3] = (uint8_t)((sectorM2 >> 16) & 0xFF);		// Set Start Sector
-//			sptd.Cdb[4] = (uint8_t)((sectorM2 >> 8) & 0xFF);		// Set Start Sector
-//			sptd.Cdb[5] = (uint8_t)(sectorM2 & 0xFF);				// Set Start Sector
-//			sptd.Cdb[6] = 0;
-//			sptd.Cdb[7] = 0;  //MSB
-//			sptd.Cdb[8] = 0;  //Middle byte of:
-//			sptd.Cdb[9] = (uint8_t)numToRead;  //Least sig byte of no. of sectors to read from CD
-//			sptd.Cdb[10] = 0;
-//			sptd.Cdb[11] = 0;
-//			sptd.Cdb[12] = 0;
-//			sptd.Cdb[13] = 0;
-//			sptd.Cdb[14] = 0;
-//			sptd.Cdb[15] = 0;
-			sgio.cmdp[2] = (uint8_t)(sectorM2 >> 24);				// Set Start Sector 
-			sgio.cmdp[3] = (uint8_t)((sectorM2 >> 16) & 0xFF);		// Set Start Sector
-			sgio.cmdp[4] = (uint8_t)((sectorM2 >> 8) & 0xFF);		// Set Start Sector
-			sgio.cmdp[5] = (uint8_t)(sectorM2 & 0xFF);				// Set Start Sector
-			sgio.cmdp[6] = 0;
-			sgio.cmdp[7] = 0;  //MSB
-			sgio.cmdp[8] = 0;  //Middle byte of:
-			sgio.cmdp[9] = (uint8_t)numToRead;  //Least sig byte of no. of sectors to read from CD
-			sgio.cmdp[10] = 0;
-			sgio.cmdp[11] = 0;
-			sgio.cmdp[12] = 0;
-			sgio.cmdp[13] = 0;
-			sgio.cmdp[14] = 0;
-			sgio.cmdp[15] = 0;
+			CMD[0] = 0xD8;						// Code for ReadCDDA command
+			CMD[1] = 0; 						// Alternate value of 8 was in original comment.
+			CMD[2] = (uint8_t)(sectorM2 >> 24);			// Set Start Sector; Most significant byte of:
+			CMD[3] = (uint8_t)((sectorM2 >> 16) & 0xFF);		// Set Start Sector; 3rd byte of:
+			CMD[4] = (uint8_t)((sectorM2 >> 8) & 0xFF);		// Set Start Sector; 2nd byte of:
+			CMD[5] = (uint8_t)(sectorM2 & 0xFF);			// Set Start Sector; Least sig byte of LBA sector no. to read from CD
+			CMD[6] = 0;
+			CMD[7] = 0;  						// MSB
+			CMD[8] = 0;  						// Middle byte of:
+			CMD[9] = (uint8_t)numToRead; 				// Least sig byte of no. of sectors to read from CD
+			CMD[10] = 0;
+			CMD[11] = 0;
+			CMD[12] = 0;
+			CMD[13] = 0;
+			CMD[14] = 0;
+			CMD[15] = 0;
 		}
 		else
 		{
 			//CDB with values for ReadCD CDB12 command.  The values were taken from MMC1 draft paper.
-			/*sptd.Cdb[0] = 0xBE;  //Code for ReadCD CDB12 command
-			sptd.Cdb[1] = 0x4;
-			sptd.Cdb[2] = (uint8_t)(sectorM2 >> 24);				// Set Start Sector 
-			sptd.Cdb[3] = (uint8_t)((sectorM2 >> 16) & 0xFF);		// Set Start Sector
-			sptd.Cdb[4] = (uint8_t)((sectorM2 >> 8) & 0xFF);		// Set Start Sector
-			sptd.Cdb[5] = (uint8_t)(sectorM2 & 0xFF);				// Set Start Sector
-			sptd.Cdb[6] = 0;  //MSB
-			sptd.Cdb[7] = 0;  //Middle byte of:
-			sptd.Cdb[8] = (uint8_t)numToRead;  //Least sig byte of no. of sectors to read from CD
-			sptd.Cdb[9] = 0xF8;
-			sptd.Cdb[10] = 0;
-			sptd.Cdb[11] = 0;
-			sptd.Cdb[12] = 0;
-			sptd.Cdb[13] = 0;
-			sptd.Cdb[14] = 0;
-			sptd.Cdb[15] = 0;*/
-			sgio.cmdp[0] = 0xBE;  //Code for ReadCD CDB12 command
-			sgio.cmdp[1] = 0x4;
-			sgio.cmdp[2] = (uint8_t)(sectorM2 >> 24);				// Set Start Sector 
-			sgio.cmdp[3] = (uint8_t)((sectorM2 >> 16) & 0xFF);		// Set Start Sector
-			sgio.cmdp[4] = (uint8_t)((sectorM2 >> 8) & 0xFF);		// Set Start Sector
-			sgio.cmdp[5] = (uint8_t)(sectorM2 & 0xFF);				// Set Start Sector
-			sgio.cmdp[6] = 0;  //MSB
-			sgio.cmdp[7] = 0;  //Middle byte of:
-			sgio.cmdp[8] = (uint8_t)numToRead;  //Least sig byte of no. of sectors to read from CD
-			sgio.cmdp[9] = 0xF8;
-			sgio.cmdp[10] = 0;
-			sgio.cmdp[11] = 0;
-			sgio.cmdp[12] = 0;
-			sgio.cmdp[13] = 0;
-			sgio.cmdp[14] = 0;
-			sgio.cmdp[15] = 0;
+			CMD[0] = 0xBE;  					//Code for ReadCD CDB12 command
+			CMD[1] = 0x4;
+			CMD[2] = (uint8_t)(sectorM2 >> 24);			// Set Start Sector 
+			CMD[3] = (uint8_t)((sectorM2 >> 16) & 0xFF);		// Set Start Sector
+			CMD[4] = (uint8_t)((sectorM2 >> 8) & 0xFF);		// Set Start Sector
+			CMD[5] = (uint8_t)(sectorM2 & 0xFF);			// Set Start Sector
+			CMD[6] = 0; 						// MSB
+			CMD[7] = 0;						// Middle byte of:
+			CMD[8] = (uint8_t)numToRead;				// Least sig byte of no. of sectors to read from CD
+			CMD[9] = 0xF8;
+			CMD[10] = 0;
+			CMD[11] = 0;
+			CMD[12] = 0;
+			CMD[13] = 0;
+			CMD[14] = 0;
+			CMD[15] = 0;
 		}
-
-		uint32_t dwBytesReturned;
-
+		sptd.cmdp = CMD;
+		sptd.cmd_len = sizeof(CMD);
 		//Send the command to drive
 		// success = DeviceIoControl(hVolume, IOCTL_SCSI_PASS_THROUGH_DIRECT, (PVOID)&sptd, (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned, NULL);
-		success = ioctl(dwBytesReturned, SG_IO, &sgio);
-		if (success)
+		uint8_t dwBytesReturned;
+		
+		success = ioctl(hVolume, SG_IO, &sptd);
+		if (success != -1)
 		{
 			reads[sector]++;
 			PassToBuffer(sector, sector + (numToRead - 4));
@@ -396,7 +329,7 @@ bool ReadCD(char* cdDeviceFile, bool mode = false)
 		}
 
 
-		return success;
+		return 1;
 	}
 	else
 	{
@@ -414,121 +347,59 @@ bool FlushCache(char cDriveLetter)
 	bool success;
 	if (hVolume != -1)
 	{
-		struct sg_io_hdr sgio;
-		unsigned char buf[2352];
-		unsigned char sense[128];
-
-		sgio.interface_id = 'S';
-		sgio.dxfer_direction = SG_DXFER_FROM_DEV;
-		sgio.cmd_len = 12;
-		sgio.dxferp = buf;
-		sgio.dxfer_len = sizeof(buf);
-		sgio.sbp = sense;
-		sgio.mx_sb_len = sizeof(sense);
-		sgio.timeout = 30000;
-		/*sptd.Length = sizeof(sptd);
-		sptd.PathId = 0;   //SCSI card ID will be filled in automatically
-		sptd.TargetId = 0; //SCSI target ID will also be filled in
-		sptd.Lun = 0;      //SCSI lun ID will also be filled in
-		sptd.CdbLength = 12; //CDB size is 12 for ReadCD D8 command
-		sptd.SenseInfoLength = 0; //Don't return any sense data
-		sptd.DataIn = SCSI_IOCTL_DATA_IN; //There will be data from drive
-		sptd.DataTransferLength = 2352; //Size of data - in this case 1 sector of data
-		sptd.TimeOutValue = 15;  //SCSI timeout value (60 seconds - maybe it should be longer)
-		sptd.DataBuffer = (void*) & (DataBuf);
-		sptd.SenseInfoOffset = 0;*/
+		unsigned char CMD[15];
+		sptd.interface_id = 'S';
+		sptd.sbp = NULL;
+		sptd.mx_sb_len = 0;
+		sptd.dxfer_len = 2352 * numToRead;
+		sptd.dxfer_direction = SG_DXFER_FROM_DEV;
+		sptd.dxferp = (void*) &DataBuf; 
+		sptd.timeout = 60000;
 
 		//CDB with values for ReadCD CDB12 command.  The values were taken from MMC1 draft paper.
 		if (reads[sector] + 1 % 50 == 0)
 		{
 			printf("Seeking back to zero for cache flush\n");
-			/*//sptd.Cdb[0] = 0xBE;  //Code for ReadCD CDB12 command
-			//sptd.Cdb[1] = 0;
-			sptd.Cdb[0] = 0xA8;  //Code for ReadCD CDB12 command
-			sptd.Cdb[1] = 8;
-			sptd.Cdb[2] = 0;  //Most significant byte of:
-			sptd.Cdb[3] = 0;  //3rd byte of:
-			sptd.Cdb[4] = 0;  //2nd byte of:
-			sptd.Cdb[5] = 0;  //Least sig byte of LBA sector no. to read from CD
-			sptd.Cdb[6] = 0;  //Most significant byte of:
-			sptd.Cdb[7] = 0;  //Middle byte of:
-			//sptd.Cdb[8] = 1;  //Least sig byte of no. of sectors to read from CD
-			sptd.Cdb[8] = 0;  //Least sig byte of no. of sectors to read from CD
-			//sptd.Cdb[9] = 0xF8;  //Raw read, 2352 bytes per sector
-			sptd.Cdb[9] = 1;  //Raw read, 2352 bytes per sector
-			sptd.Cdb[10] = 0;
-			sptd.Cdb[11] = 0;
-			sptd.Cdb[12] = 0;
-			sptd.Cdb[13] = 0;
-			sptd.Cdb[14] = 0;
-			sptd.Cdb[15] = 0;*/
-			
-			//sptd.Cdb[0] = 0xBE;  //Code for ReadCD CDB12 command
-			//sptd.Cdb[1] = 0;
-			sgio.cmdp[0] = 0xA8;  //Code for ReadCD CDB12 command
-			sgio.cmdp[1] = 8;
-			sgio.cmdp[2] = 0;  //Most significant byte of:
-			sgio.cmdp[3] = 0;  //3rd byte of:
-			sgio.cmdp[4] = 0;  //2nd byte of:
-			sgio.cmdp[5] = 0;  //Least sig byte of LBA sector no. to read from CD
-			sgio.cmdp[6] = 0;  //Most significant byte of:
-			sgio.cmdp[7] = 0;  //Middle byte of:
-			//sptd.Cdb[8] = 1;  //Least sig byte of no. of sectors to read from CD
-			sgio.cmdp[8] = 0;  //Least sig byte of no. of sectors to read from CD
-			//sptd.Cdb[9] = 0xF8;  //Raw read, 2352 bytes per sector
-			sgio.cmdp[9] = 1;  //Raw read, 2352 bytes per sector
-			sgio.cmdp[10] = 0;
-			sgio.cmdp[11] = 0;
-			sgio.cmdp[12] = 0;
-			sgio.cmdp[13] = 0;
-			sgio.cmdp[14] = 0;
-			sgio.cmdp[15] = 0;
+			CMD[0] = 0xA8;						//Code for ReadCD CDB12 command; Value of 0xBE was in original comment
+			CMD[1] = 8;						// Alternate value of 0 was in original comment
+			CMD[2] = 0;						//Most significant byte of:
+			CMD[3] = 0;						//3rd byte of:
+			CMD[4] = 0;						//2nd byte of:
+			CMD[5] = 0;						//Least sig byte of LBA sector no. to read from CD
+			CMD[6] = 0;						//Most significant byte of:
+			CMD[7] = 0;						//Middle byte of:
+			CMD[8] = 0;						//Least sig byte of no. of sectors to read from CD; Value of 1 was in original comment
+			CMD[9] = 1;						//Raw read, 2352 bytes per sector; Value of 0xF8 was in original comment
+			CMD[10] = 0;
+			CMD[11] = 0;
+			CMD[12] = 0;
+			CMD[13] = 0;
+			CMD[14] = 0;
+			CMD[15] = 0;
 		}
 		else {
-			/*sptd.Cdb[0] = 0xA8;  //Code for ReadCDDA command
-			sptd.Cdb[1] = 8; //FUA
-			sptd.Cdb[2] = (uint8_t)(sector >> 24);				// Set Start Sector 
-			sptd.Cdb[3] = (uint8_t)((sector >> 16) & 0xFF);		// Set Start Sector
-			sptd.Cdb[4] = (uint8_t)((sector >> 8) & 0xFF);		// Set Start Sector
-			sptd.Cdb[5] = (uint8_t)(sector & 0xFF);				// Set Start Sector
-			sptd.Cdb[6] = 0;
-			sptd.Cdb[7] = 0;  //MSB
-			sptd.Cdb[8] = 0;  //Middle byte of:
-			sptd.Cdb[9] = 1;  //Least sig byte of no. of sectors to read from CD
-			sptd.Cdb[10] = 0;
-			sptd.Cdb[11] = 0;
-			sptd.Cdb[12] = 0;
-			sptd.Cdb[13] = 0;
-			sptd.Cdb[14] = 0;
-			sptd.Cdb[15] = 0;*/
-			sgio.cmdp[0] = 0xA8;  //Code for ReadCDDA command
-			sgio.cmdp[1] = 8; //FUA
-			sgio.cmdp[2] = (uint8_t)(sector >> 24);				// Set Start Sector 
-			sgio.cmdp[3] = (uint8_t)((sector >> 16) & 0xFF);		// Set Start Sector
-			sgio.cmdp[4] = (uint8_t)((sector >> 8) & 0xFF);		// Set Start Sector
-			sgio.cmdp[5] = (uint8_t)(sector & 0xFF);				// Set Start Sector
-			sgio.cmdp[6] = 0;
-			sgio.cmdp[7] = 0;  //MSB
-			sgio.cmdp[8] = 0;  //Middle byte of:
-			sgio.cmdp[9] = 1;  //Least sig byte of no. of sectors to read from CD
-			sgio.cmdp[10] = 0;
-			sgio.cmdp[11] = 0;
-			sgio.cmdp[12] = 0;
-			sgio.cmdp[13] = 0;
-			sgio.cmdp[14] = 0;
-			sgio.cmdp[15] = 0;
+			CMD[0] = 0xA8;  //Code for ReadCDDA command
+			CMD[1] = 8; //FUA
+			CMD[2] = (uint8_t)(sector >> 24);			// Set Start Sector 
+			CMD[3] = (uint8_t)((sector >> 16) & 0xFF);		// Set Start Sector
+			CMD[4] = (uint8_t)((sector >> 8) & 0xFF);		// Set Start Sector
+			CMD[5] = (uint8_t)(sector & 0xFF);			// Set Start Sector
+			CMD[6] = 0;
+			CMD[7] = 0;						//MSB
+			CMD[8] = 0;						//Middle byte of:
+			CMD[9] = 1;						//Least sig byte of no. of sectors to read from CD
+			CMD[10] = 0;
+			CMD[11] = 0;
+			CMD[12] = 0;
+			CMD[13] = 0;
+			CMD[14] = 0;
+			CMD[15] = 0;
 		}
 
 		uint32_t dwBytesReturned;
 
 		//Send the command to drive
-		/*success = DeviceIoControl(hVolume,
-			IOCTL_SCSI_PASS_THROUGH_DIRECT,
-			(void*)&sptd, (uint32_t)sizeof(SCSI_PASS_THROUGH_DIRECT),
-			NULL, 0,
-			&dwBytesReturned,
-			NULL);*/
-		success = ioctl(dwBytesReturned, SG_IO, &sgio);
+		success = ioctl(hVolume, SG_IO, &sptd);
 		if (success)
 		{
 			printf("Cleared cache\n");
@@ -555,9 +426,10 @@ void Usage()
 
 int main(int argc, char* argv[])
 {
+	memset(&sptd, 0, sizeof(struct sg_io_hdr));
 	if (argc < 4) {
 		Usage();
-		return;
+		return 0;
 	}
 
 	make_scrambled_table();
@@ -570,13 +442,13 @@ int main(int argc, char* argv[])
 	hVolume = OpenVolume(argv[1]);
 
 	printf("Reading from %ld to %ld\n", sector, endsector);
-
-	fopen("scramout.bin", "wb");
-	fopen("unscramout.bin", "wb");
+	
+	scramout = fopen("scramout.bin", "wb");
+	unscramout = fopen("unscramout.bin", "wb");
 
 	while (sector < endsector)
 	{
-		if (!ReadCD(argv[1], (argc > 4)))
+		if (!ReadCD(hVolume, (argc > 4)))
 		{
 			//long offset = rand() % 6;
 			//offset *= (rand() % 2 ? -1 : 1);
@@ -595,6 +467,6 @@ int main(int argc, char* argv[])
 
 	fclose(scramout);
 	fclose(unscramout);
-	CloseVolume(hVolume);
-	return;
+	close(hVolume);
+	return 0;
 }
