@@ -28,3 +28,7 @@ Tests that were also performed:
 Still to be done:
 
 - Not-0xBE mode does *not* work, and that needs to be fixed.
+
+### June 6th 14:01
+
+Extra edit right after that last commit. Oops, forgot to update FlushCache. Fixed now!

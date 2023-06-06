@@ -397,7 +397,8 @@ bool FlushCache(char cDriveLetter)
 		}
 
 		uint32_t dwBytesReturned;
-
+		sptd.cmdp = CMD;
+		sptd.cmd_len = sizeof(CMD);
 		//Send the command to drive
 		success = ioctl(hVolume, SG_IO, &sptd);
 		if (success)
