@@ -32,3 +32,11 @@ Still to be done:
 ### June 6th 14:01
 
 Extra edit right after that last commit. Oops, forgot to update FlushCache. Fixed now!
+
+### June 7th 14:30
+
+Today, not much progress was made. However, it was found out that the believed non-functional part of the code may actually be functional. The 0xD8 mode is apparently a Plextor proprietary mode which I was unaware of. Nevertheless, it is assumed to be functional. So today, was mostly cleaning up code, cleaning up comments, and also attempting to implement a Reed Solomon decoder. That didn't work out, so it's nowhere to be found here, but hopefully that will be the next major update. Other than that, nothing has been changed, and it is still functional.
+
+More tests done:
+
+- Used `iat` to convert unscramout.bin to an ISO file to verify maintenance of data integrity. Passed perfectly.

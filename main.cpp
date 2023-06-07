@@ -58,7 +58,7 @@
 #include <sys/ioctl.h>
 #include <limits.h>
 
-//Lazy globals
+// Lazy globals
 long sector;
 long endsector;
 FILE* scramout;
@@ -85,6 +85,7 @@ void make_scrambled_table(void);
 int OpenVolume(char* cdDeviceFile);
 bool CloseVolume(int hVolume);
 bool ReadCD(int hVolume);
+int testReedSolomon(uint8_t Buf[2352]);
 
 //** Defines taken from ntddscsi.h in MS Windows DDK CD
 #define SCSI_IOCTL_DATA_OUT             0 //Give data to SCSI device (e.g. for writing)
@@ -141,6 +142,11 @@ int OpenVolume(char* cdDeviceFile)
 
    If you don't have windows.h, some of the define constants are
    listed as comments.
+   
+   Edit: The above is no longer correct. Instead, it does not check since
+   we can assume we're always giving it a CDROM drive, and because of
+   Linux, we now use a file descriptor instead of a handle. Notably, the
+   rest of the program has been altered around this as well.
 */
 {
 	int hVolume = open(cdDeviceFile, O_RDONLY | O_NONBLOCK);
@@ -236,15 +242,16 @@ bool GetFromBuffer(long sectorNo)
 	{
 		printf("Error. Need to fix sector %ld. Tried %u times.\n", sector, reads[sector]);
 		//Sector repair logic can go here
+		
 	}
 	fwrite(NewBufUnscrambled, 1, 2352, unscramout);
 	printf("Wrote sector %ld unscrambled\n", sector);
 	fwrite(NewBuf, 1, 2352, scramout);
 	printf("Wrote sector %ld scrambled\n", sector);
 	return true;
-	//printf("\n");
-	//printf("Found sector %02X:%02X:%02X at offset of %d\n", NewBufUnscrambled[0x00C], NewBufUnscrambled[0x00D], NewBufUnscrambled[0x00E], offset);
-	//printf("Result:\n %d\n", ecmify(NewBufUnscrambled));
+	// printf("\n");
+	// printf("Found sector %02X:%02X:%02X at offset of %d\n", NewBufUnscrambled[0x00C], NewBufUnscrambled[0x00D], NewBufUnscrambled[0x00E], offset);
+	// printf("Result:\n %d\n", ecmify(NewBufUnscrambled));
 }
 
 bool ReadCD(int hVolume, bool mode = false)
@@ -254,11 +261,10 @@ bool ReadCD(int hVolume, bool mode = false)
 	3. Send the request to the drive.
 */
 {
-	bool success;
-	long sectorM2 = sector - 2;
-	uint32_t dwBytesReturned;
-	//Don't read if it's in the buffer
-	if (GetFromBuffer(sector)) return true;
+	bool success; // Create a boolean that is returned to indicate success or lack thereof.
+	long sectorM2 = sector - 2; // Sector minus 2.
+	
+	if (GetFromBuffer(sector)) return true; // If there is content in the buffer, do not read.
 
 	if (hVolume != -1)
 	{
@@ -271,8 +277,9 @@ bool ReadCD(int hVolume, bool mode = false)
 		sptd.dxferp = (void*) &DataBuf; 
 		sptd.timeout = 60000;
 
-		if (!mode) //if we're not using 0xbe mode
+		if (!mode) // Conditional: If we are not using 0xBE mode.
 		{
+			// CDB with values for ReadCDDA proprietary Plextor command.
 			CMD[0] = 0xD8;						// Code for ReadCDDA command
 			CMD[1] = 0; 						// Alternate value of 8 was in original comment.
 			CMD[2] = (uint8_t)(sectorM2 >> 24);			// Set Start Sector; Most significant byte of:
@@ -290,10 +297,10 @@ bool ReadCD(int hVolume, bool mode = false)
 			CMD[14] = 0;
 			CMD[15] = 0;
 		}
-		else
+		else // Any other condition.
 		{
-			//CDB with values for ReadCD CDB12 command.  The values were taken from MMC1 draft paper.
-			CMD[0] = 0xBE;  					//Code for ReadCD CDB12 command
+			// CDB with values for ReadCD CDB12 command. The values were taken from MMC1 draft paper.
+			CMD[0] = 0xBE;  					// Code for ReadCD CDB12 command
 			CMD[1] = 0x4;
 			CMD[2] = (uint8_t)(sectorM2 >> 24);			// Set Start Sector 
 			CMD[3] = (uint8_t)((sectorM2 >> 16) & 0xFF);		// Set Start Sector
@@ -312,28 +319,22 @@ bool ReadCD(int hVolume, bool mode = false)
 		}
 		sptd.cmdp = CMD;
 		sptd.cmd_len = sizeof(CMD);
-		//Send the command to drive
-		// success = DeviceIoControl(hVolume, IOCTL_SCSI_PASS_THROUGH_DIRECT, (PVOID)&sptd, (DWORD)sizeof(SCSI_PASS_THROUGH_DIRECT), NULL, 0, &dwBytesReturned, NULL);
-		uint8_t dwBytesReturned;
-		
-		success = ioctl(hVolume, SG_IO, &sptd);
-		if (success != -1)
+		success = ioctl(hVolume, SG_IO, &sptd);				//Send the command to drive
+		if (success != -1) // Conditional: If we succeed.
 		{
 			reads[sector]++;
 			PassToBuffer(sector, sector + (numToRead - 4));
 			return GetFromBuffer(sector);
 		}
-		else
+		else // Any other condition.
 		{
 			printf("DeviceIOControl with SCSI_PASS_THROUGH_DIRECT command failed.\n");
 		}
-
-
-		return 1;
+		return 1; // Success
 	}
 	else
 	{
-		return 0;
+		return 0; // Failure
 	}
 }
 
@@ -356,20 +357,20 @@ bool FlushCache(char cDriveLetter)
 		sptd.dxferp = (void*) &DataBuf; 
 		sptd.timeout = 60000;
 
-		//CDB with values for ReadCD CDB12 command.  The values were taken from MMC1 draft paper.
 		if (reads[sector] + 1 % 50 == 0)
 		{
+			// CDB with values for ReadCD CDB12 command.  The values were taken from MMC1 draft paper.
 			printf("Seeking back to zero for cache flush\n");
-			CMD[0] = 0xA8;						//Code for ReadCD CDB12 command; Value of 0xBE was in original comment
+			CMD[0] = 0xA8;						// Code for ReadCD CDB12 command; Value of 0xBE was in original comment
 			CMD[1] = 8;						// Alternate value of 0 was in original comment
-			CMD[2] = 0;						//Most significant byte of:
-			CMD[3] = 0;						//3rd byte of:
-			CMD[4] = 0;						//2nd byte of:
-			CMD[5] = 0;						//Least sig byte of LBA sector no. to read from CD
-			CMD[6] = 0;						//Most significant byte of:
-			CMD[7] = 0;						//Middle byte of:
-			CMD[8] = 0;						//Least sig byte of no. of sectors to read from CD; Value of 1 was in original comment
-			CMD[9] = 1;						//Raw read, 2352 bytes per sector; Value of 0xF8 was in original comment
+			CMD[2] = 0;						// Most significant byte of:
+			CMD[3] = 0;						// 3rd byte of:
+			CMD[4] = 0;						// 2nd byte of:
+			CMD[5] = 0;						// Least sig byte of LBA sector no. to read from CD
+			CMD[6] = 0;						// Most significant byte of:
+			CMD[7] = 0;						// Middle byte of:
+			CMD[8] = 0;						// Least sig byte of no. of sectors to read from CD; Value of 1 was in original comment
+			CMD[9] = 1;						// Raw read, 2352 bytes per sector; Value of 0xF8 was in original comment
 			CMD[10] = 0;
 			CMD[11] = 0;
 			CMD[12] = 0;
@@ -378,16 +379,16 @@ bool FlushCache(char cDriveLetter)
 			CMD[15] = 0;
 		}
 		else {
-			CMD[0] = 0xA8;  //Code for ReadCDDA command
-			CMD[1] = 8; //FUA
+			CMD[0] = 0xA8;  					// Code for ReadCD CDB12 command; Original comment claimed it was the ReadCDDA command.
+			CMD[1] = 8; 						// FUA
 			CMD[2] = (uint8_t)(sector >> 24);			// Set Start Sector 
 			CMD[3] = (uint8_t)((sector >> 16) & 0xFF);		// Set Start Sector
 			CMD[4] = (uint8_t)((sector >> 8) & 0xFF);		// Set Start Sector
 			CMD[5] = (uint8_t)(sector & 0xFF);			// Set Start Sector
 			CMD[6] = 0;
-			CMD[7] = 0;						//MSB
-			CMD[8] = 0;						//Middle byte of:
-			CMD[9] = 1;						//Least sig byte of no. of sectors to read from CD
+			CMD[7] = 0;						// MSB
+			CMD[8] = 0;						// Middle byte of:
+			CMD[9] = 1;						// Least sig byte of no. of sectors to read from CD
 			CMD[10] = 0;
 			CMD[11] = 0;
 			CMD[12] = 0;
@@ -395,12 +396,11 @@ bool FlushCache(char cDriveLetter)
 			CMD[14] = 0;
 			CMD[15] = 0;
 		}
-
-		uint32_t dwBytesReturned;
+		
 		sptd.cmdp = CMD;
 		sptd.cmd_len = sizeof(CMD);
-		//Send the command to drive
-		success = ioctl(hVolume, SG_IO, &sptd);
+
+		success = ioctl(hVolume, SG_IO, &sptd);				// Send the command to drive
 		if (success)
 		{
 			printf("Cleared cache\n");
@@ -463,8 +463,8 @@ int main(int argc, char* argv[])
 		sector++;
 	}
 
-	//printf("Finished. Press any key.");
-	//_getch();
+	printf("Finished. Press any key.");
+	getchar();
 
 	fclose(scramout);
 	fclose(unscramout);
