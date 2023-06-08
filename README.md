@@ -67,3 +67,7 @@ rs_decoder.cpp:(.text+0x2f3): undefined reference to `init_rs_int(int, int, int,
 collect2: error: ld returned 1 exit status```
 
 This is a known isssue that I am now working on. It's very possible that uses a different library or a self-built one will solve all these issues. In fact, since we're dealing with shorts/words, and the closest thing that libfec will take is an int, it would actually be nice to find a more appropriate library or use it as direction to build my own.
+
+### June 8th 17:00
+
+Something I thought about after pushing today that could save me time in the future: A Makefile. This push is identical to the last, except the directory structure has been changed, and a Makefile has been implemented with `make readcd` and `make clean` so that compiling, updating (even when not every file has been changed), and cleaning can be done way easier. I don't know why I didn't do this sooner.
