@@ -40,3 +40,30 @@ Today, not much progress was made. However, it was found out that the believed n
 More tests done:
 
 - Used `iat` to convert unscramout.bin to an ISO file to verify maintenance of data integrity. Passed perfectly.
+
+
+### June 8th 16:00
+
+Today, everything went pretty smoothly. After reading the ECMA 130 standard, I feel as though I very much understand how the parity bytes are arranged. That being said, I can't really test it. I'm having linker errors consistent with C -> C++ issues went attempting to compile this code that uses libfec's rs decoder. Here's what's been done.
+
+- Went on a commenting spree in main.cpp. Everything is explicitly explained now.
+- Cleaned up the remaining Windows code we didn't need. Maybe there's still some hanging around, but it'll get removed too.
+	- Comments have been left where significant parts were removed.
+- Added rs_decoder.cpp
+	- Name might change in the future.
+	- Most of the code is untested, because the part that interfaces with libfec does not work.
+	- Hopefully a few debugging sessions later this will be functional.
+
+How to recreate the linker errors I've been getting from the new code:
+
+- Install libfec and it's dev package
+- Attempt to compile using g++: `g++ -lfec main.cpp descramble.cpp edcchk.cpp rs_decoder.cpp -o output`
+- Receive errors:
+```/usr/bin/ld: /tmp/ccYqa8lo.o: in function `rsDecode(unsigned char*)':
+rs_decoder.cpp:(.text+0x2f3): undefined reference to `init_rs_int(int, int, int, int, int, int)'
+/usr/bin/ld: rs_decoder.cpp:(.text+0x31f): undefined reference to `init_rs_int(int, int, int, int, int, int)'
+/usr/bin/ld: rs_decoder.cpp:(.text+0x434): undefined reference to `decode_rs_int(void*, int*, int*, int)'
+/usr/bin/ld: rs_decoder.cpp:(.text+0x454): undefined reference to `decode_rs_int(void*, int*, int*, int)'
+collect2: error: ld returned 1 exit status```
+
+This is a known isssue that I am now working on. It's very possible that uses a different library or a self-built one will solve all these issues. In fact, since we're dealing with shorts/words, and the closest thing that libfec will take is an int, it would actually be nice to find a more appropriate library or use it as direction to build my own.
