@@ -71,3 +71,7 @@ This is a known isssue that I am now working on. It's very possible that uses a 
 ### June 8th 17:00
 
 Something I thought about after pushing today that could save me time in the future: A Makefile. This push is identical to the last, except the directory structure has been changed, and a Makefile has been implemented with `make readcd` and `make clean` so that compiling, updating (even when not every file has been changed), and cleaning can be done way easier. I don't know why I didn't do this sooner.
+
+### June 12th 11:30
+
+Needless to say, my Makefile was kind of bad, and didn't really work. I had a misunderstanding of how object files work (mostly because I've never compiled shared libraries), so that's been sorted now. I've also re-done the Reed Solomon error correction code, because I realized I did it wrong, and had a kind of naïve understanding of how it worked. I also incorporated a new Reed Solomon library, from https://github.com/mersinvald/Reed-Solomon because libfec just didn't want to work no matter what I did. I'm pushing this bfore noon because I wanted to get that Makefile updated and also get this new code up there, before I continue working. I'm currently working on testing to see if this code works for error correction, and will probably push again this afternoon.

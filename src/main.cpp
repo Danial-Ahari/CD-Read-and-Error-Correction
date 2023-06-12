@@ -125,7 +125,7 @@ bool PassToBuffer(long first, long last) {
 	// Check if there's a sync in the data we got and see if it's where we expected it to be.
 	for (int offset = 0; offset < 2352 * (numToRead - 1); offset++) {		// Loop: for all offsets between 0 and 2351 inclusive
 	
-		printf("Searching for data sector\n"); 					// Notify that we are looking for data.
+		// printf("Searching for data sector\n"); 					// Notify that we are looking for data.
 		uint8_t* SectorData = &(DataBuf[offset]);				// Put the data from our buffer into an array to work with.
 		
 		if (SectorData[0x000] == 0x00 &&
@@ -186,7 +186,12 @@ bool GetFromBuffer(long sectorNo) {
 	if (ecmify(NewBufUnscrambled)) { // Conditional: If ecmify() reports that the sector is bad.
 		printf("Error. Need to fix sector %ld. Tried %u times.\n", sector, reads[sector]);
 		// Sector repair logic can go here. Not implemented yet.
-		rsDecode(NewBufUnscrambled);
+		int z = 0;
+		while(ecmify(NewBufUnscrambled) {
+			z++
+			rsDecode(NewBufUnscrambled);
+			if(z==4) break;
+		}
 	}
 	
 	// Writes unscrambled sector in unscrambled output file.
