@@ -187,8 +187,8 @@ bool GetFromBuffer(long sectorNo) {
 		printf("Error. Need to fix sector %ld. Tried %u times.\n", sector, reads[sector]);
 		// Sector repair logic can go here. Not implemented yet.
 		int z = 0;
-		while(ecmify(NewBufUnscrambled) {
-			z++
+		while(ecmify(NewBufUnscrambled)) {
+			z++;
 			rsDecode(NewBufUnscrambled);
 			if(z==4) break;
 		}
