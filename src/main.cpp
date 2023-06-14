@@ -80,6 +80,7 @@ int OpenVolume(char* cdDeviceFile);
 bool CloseVolume(int cdFileDesc);
 bool ReadCD(int cdFileDesc);
 int rsDecode(uint8_t* Buf);
+bool FlushCache();
 
 // ntddscsi.h defines that used to be here no longer needed.
 
@@ -180,18 +181,28 @@ bool GetFromBuffer(long sectorNo) {
 
 	for (int i = 0; i < 2352; i++) { // Loop: for every piece of data in scrambled_table
 		NewBufUnscrambled[i] = NewBuf[i] ^ scrambled_table[i];
-		// Formerly, there was a commented out piece of code here that just printed unscrambled data. Removed.
 	}
 	
 	if (ecmify(NewBufUnscrambled)) { // Conditional: If ecmify() reports that the sector is bad.
 		printf("Error. Need to fix sector %ld. Tried %u times.\n", sector, reads[sector]);
 		// Sector repair logic can go here. Not implemented yet.
-		int z = 0;
-		while(ecmify(NewBufUnscrambled)) {
-			z++;
+		//for(int k = 0; k < 10; k ++) {
 			rsDecode(NewBufUnscrambled);
-			if(z==4) break;
-		}
+			if(!ecmify(NewBufUnscrambled)) {
+				printf("Successfully fixed!\n");
+			} /* else {
+				printf("Re-reading the broken sector.\n");
+				FlushCache();
+				reads[sector]++;
+				PassToBuffer(sector, sector + (numToRead - 4));
+				for (int l = 0; l < 2352; l++) { // Loop: for every piece of data in scrambled_table
+					NewBufUnscrambled[l] = NewBuf[l] ^ scrambled_table[l];
+				}
+			} */
+			if(ecmify(NewBufUnscrambled) /*&& k == 9*/) {
+				printf("Failed to fix.\n");
+			}
+		//}
 	}
 	
 	// Writes unscrambled sector in unscrambled output file.
@@ -355,7 +366,7 @@ bool FlushCache()
 			printf("Cleared cache\n");
 		}
 		else { // Any other condition.
-			printf("DeviceIOControl with SCSI_PASS_THROUGH_DIRECT command failed.\n");
+			printf("ioctl() with SG_IO command failed.\n");
 		}
 		return 1;
 	}

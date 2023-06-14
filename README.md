@@ -1,6 +1,29 @@
 # RCEU-2023
 Host-based CD-ROM Data Recovery
 
+## Acknowledgements
+
+Original source code for example - Natalia Portillo (as Truman) via "ReadCD"
+Initial commit code - Dr. Jacob Hauenstein
+Example used for porting to Linux - https://stackoverflow.com/questions/29884540/how-to-issue-a-read-cd-command-to-a-cd-rom-drive-in-windows
+Descramble - Jonathan Gevaryahu via DiscImageCreator
+EDC/ECC Checker - https://github.com/claunia/edccchk (License in source file)
+Reed Solomon code library - https://github.com/mersinvald/Reed-Solomon (License in include folder)
+
+## Build
+
+- Clone source code or download ZIP file and extract to a folder.
+
+`git clone https://github.com/Danial-Ahari/RCEU-2023.git`
+
+- Enter folder and run make.
+
+`make readcd`
+
+## Usage
+
+`readcd <device file> <first sector number> <last sector number> [put anything here to enable 0xBE mode]`
+
 ## Changelog
 
 ### Original Code
@@ -75,3 +98,7 @@ Something I thought about after pushing today that could save me time in the fut
 ### June 12th 11:30
 
 Needless to say, my Makefile was kind of bad, and didn't really work. I had a misunderstanding of how object files work (mostly because I've never compiled shared libraries), so that's been sorted now. I've also re-done the Reed Solomon error correction code, because I realized I did it wrong, and had a kind of naïve understanding of how it worked. I also incorporated a new Reed Solomon library, from https://github.com/mersinvald/Reed-Solomon because libfec just didn't want to work no matter what I did. I'm pushing this bfore noon because I wanted to get that Makefile updated and also get this new code up there, before I continue working. I'm currently working on testing to see if this code works for error correction, and will probably push again this afternoon.
+
+### June 14th 13:30
+
+This is the first build that can correct errors! The error correction code I wrote implementing that RS library from before is actually functional. Unfortunately, I wasn't able to get re-reading and recursively attempting to fix errors to work in this case, but that's on the to-do list. I was able to correct errors on a pressed disc and a few CD-Rs. I also decided to expand the README. In the future, I'm going to split this changelog off into it's own file.
