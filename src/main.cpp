@@ -43,6 +43,7 @@
 //Usage: readcd <drive letter>
 //*************************************************************
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <cassert>
@@ -66,6 +67,8 @@ FILE* unscramout;
 const unsigned int numToRead = 26; // Value from DCDumper
 std::map<int, unsigned int> reads;
 bool seekback = false;
+bool doCorrection;
+// int sectorMode;
 
 // ECC/EDC stuff
 int8_t ecmify(uint8_t* sector);
@@ -146,6 +149,23 @@ bool PassToBuffer(long first, long last) {
 			uint8_t frames = BcdToDec(TempBufUnscrambled[14]);
 			long foundSector = ((minutes * 60) + seconds) * 75 + frames;
 			
+			// Here's some code to grab the mode (not form), commented out because I have no use for it yet. When used, also uncomment the lazy global that goes with it.
+			/* switch(TempBufUnscrambled[15]) {
+				case 0x00:
+					sectorMode = 0;
+					break;
+				case 0x01:
+					sectorMode = 1;
+					break;
+				case 0x02:
+					sectorMode = 2;
+					break;
+				default:
+					sectorMode = 1; // Assume we can correct it.
+			} */
+			
+			
+			
 			foundSector -= 150; // Header sector numbering and CDB numbering differ by 150 -- adjust number from header
 			
 			printf("Found sector header for %ld -- looking for %ld\n", foundSector, first); // Report that we found the header for a sector.
@@ -184,25 +204,33 @@ bool GetFromBuffer(long sectorNo) {
 	}
 	
 	if (ecmify(NewBufUnscrambled)) { // Conditional: If ecmify() reports that the sector is bad.
-		printf("Error. Need to fix sector %ld. Tried %u times.\n", sector, reads[sector]);
-		// Sector repair logic can go here. Not implemented yet.
-		//for(int k = 0; k < 10; k ++) {
-			rsDecode(NewBufUnscrambled);
-			if(!ecmify(NewBufUnscrambled)) {
-				printf("Successfully fixed!\n");
-			} /* else {
-				printf("Re-reading the broken sector.\n");
-				FlushCache();
-				reads[sector]++;
-				PassToBuffer(sector, sector + (numToRead - 4));
-				for (int l = 0; l < 2352; l++) { // Loop: for every piece of data in scrambled_table
-					NewBufUnscrambled[l] = NewBuf[l] ^ scrambled_table[l];
+		if (doCorrection == true) {
+			// Sector repair logic can go here. Not implemented yet.
+			int k = 0;
+			while(k < 50) {
+				printf("Error. Need to fix sector %ld. Tried %u times.\n", sector, reads[sector]);
+				rsDecode(NewBufUnscrambled);
+				if(!ecmify(NewBufUnscrambled)) {
+					printf("Successfully fixed!\n");
+					break;
+				} else {
+					printf("Re-reading the broken sector.\n");
+					if(FlushCache()) {
+					
+					}
+					PassToBuffer(sector, sector + (numToRead - 4));
+					for (int l = 0; l < 2352; l++) { // Loop: for every piece of data in scrambled_table
+						NewBufUnscrambled[l] = NewBuf[l] ^ scrambled_table[l];
+					}
+				} 
+				if(ecmify(NewBufUnscrambled) && k == 49) {
+					printf("Failed to fix.\n");
 				}
-			} */
-			if(ecmify(NewBufUnscrambled) /*&& k == 9*/) {
-				printf("Failed to fix.\n");
+				k++;
 			}
-		//}
+		} else {
+			printf("Not performing correction.");
+		}
 	}
 	
 	// Writes unscrambled sector in unscrambled output file.
@@ -322,8 +350,8 @@ bool FlushCache()
 		if (reads[sector] + 1 % 50 == 0) { // Conditional
 			// CDB with values for ReadCD CDB12 command.  The values were taken from MMC1 draft paper.
 			printf("Seeking back to zero for cache flush\n");
-			CMD[0] = 0xA8;						// Code for ReadCD CDB12 command; Value of 0xBE was in original comment
-			CMD[1] = 8;						// Alternate value of 0 was in original comment
+			CMD[0] = 0x10;						// Code for ReadCD CDB12 command; Value of 0xBE was in original comment
+			CMD[1] = 0;						// Alternate value of 0 was in original comment
 			CMD[2] = 0;						// Most significant byte of:
 			CMD[3] = 0;						// 3rd byte of:
 			CMD[4] = 0;						// 2nd byte of:
@@ -331,7 +359,7 @@ bool FlushCache()
 			CMD[6] = 0;						// Most significant byte of...
 			CMD[7] = 0;						// Middle byte of...
 			CMD[8] = 0;						// Least sig byte of no. of sectors to read from CD; Value of 1 was in original comment
-			CMD[9] = 1;						// Raw read, 2352 bytes per sector; Value of 0xF8 was in original comment
+			CMD[9] = 0;						// Raw read, 2352 bytes per sector; Value of 0xF8 was in original comment
 			CMD[10] = 0;
 			CMD[11] = 0;
 			CMD[12] = 0;
@@ -340,16 +368,16 @@ bool FlushCache()
 			CMD[15] = 0;
 		}
 		else { // Any condition not addressed above.
-			CMD[0] = 0xA8;  					// Code for ReadCD CDB12 command; Original comment claimed it was the ReadCDDA command.
-			CMD[1] = 8; 						// FUA
-			CMD[2] = (uint8_t)(sector >> 24);			// Set Start Sector 
-			CMD[3] = (uint8_t)((sector >> 16) & 0xFF);		// Set Start Sector
-			CMD[4] = (uint8_t)((sector >> 8) & 0xFF);		// Set Start Sector
-			CMD[5] = (uint8_t)(sector & 0xFF);			// Set Start Sector
+			CMD[0] = 0xBE;  					// Code for ReadCD CDB12 command; Original comment claimed it was the ReadCDDA command.
+			CMD[1] = 0x4; 						// FUA
+			CMD[2] = (uint8_t)((sector-2) >> 24);			// Set Start Sector 
+			CMD[3] = (uint8_t)(((sector-2) >> 16) & 0xFF);		// Set Start Sector
+			CMD[4] = (uint8_t)(((sector-2) >> 8) & 0xFF);		// Set Start Sector
+			CMD[5] = (uint8_t)((sector-2) & 0xFF);			// Set Start Sector
 			CMD[6] = 0;
 			CMD[7] = 0;						// Most significant byte of...
-			CMD[8] = 0;						// Middle byte of...
-			CMD[9] = 1;						// Least sig byte of no. of sectors to read from CD
+			CMD[8] = (uint8_t)numToRead;						// Middle byte of...
+			CMD[9] = 0xF8;						// Least sig byte of no. of sectors to read from CD
 			CMD[10] = 0;
 			CMD[11] = 0;
 			CMD[12] = 0;
@@ -362,7 +390,8 @@ bool FlushCache()
 		sgio.cmd_len = sizeof(CMD);
 
 		success = ioctl(cdFileDesc, SG_IO, &sgio); // Send the command to drive
-		if (success =! -1) { // Conditional: If the cache was cleared.
+		if (success != -1) { // Conditional: If the cache was cleared.
+			reads[sector]++;
 			printf("Cleared cache\n");
 		}
 		else { // Any other condition.
@@ -380,7 +409,19 @@ bool FlushCache()
 // Simple function that prints the usage of this application.
 // -> return - nothing
 void Usage() {
-	printf("Usage: readcd <device file> <first sector number> <last sector number> [put anything here to enable 0xBE mode]\n\n");
+	printf("Usage: readcd <device file> <first sector number> <last sector number> <mode> <correction> [scrambled output] [unscrambled output]\n\n" 
+		"<device file> - path to the device file, ex. /dev/sr0\n"
+		"<first sector number> - the first sector to read from disc\n"
+		"<last sector number> - the last sector to read from disc\n"
+		"<mode> - 0 for 0xD8 mode, 1 for 0xBE mode\n"
+		"<correction> - 1 to perform correction, 0 to not\n"
+		"scrambled output - file to output scrambled data to; if used, unscrambled output must be included as well\n"
+		"unscrambled output - file to output unscrambled data to; if used, scrambled output must be included as well\n"
+		"\nFuture usage of <correction>: (NOT CURRENTLY IMPLEMENTED)\n"
+		"0 - do not perform any correction\n"
+		"1 - perform correction type 1 (Reed Solomon ECC with multiple re-read attempts)\n"
+		"2 - perform re-read correction (Re-read an errored sector 100 times and check for correlation between reads)\n"
+		"3 - full correction (RS ECC, and store re-reads to correlate on failure)\n");
 	return;
 }
 
@@ -392,11 +433,14 @@ void Usage() {
 	// argv[2] - the first sector number to read
 	// argv[3] - the last sector number to read
 	// argv[4] - Enable 0xBE mode?
+	// argv[5] - Perform error correction?
+	// argv[6] - Optional; File to output scrambled data to.
+	// argv[7] - Optional; File to output unscrambled data to.
 // -> return - Always return 0 to say the program did it's thing.
 int main(int argc, char* argv[]) {
 	memset(&sgio, 0, sizeof(struct sg_io_hdr)); // Make sure sgio has been given enough space in memory, before we do anything else.
 	
-	if (argc < 4) { // Conditional: If we don't have at least 4 arguments.
+	if (argc < 6) { // Conditional: If we don't have at least 4 arguments.
 		Usage();
 		return 0;
 	}
@@ -413,11 +457,31 @@ int main(int argc, char* argv[]) {
 	printf("Reading from %ld to %ld\n", sector, endsector); // Notify that we're beginning to read.
 	
 	// Create files for our output.
-	scramout = fopen("scramout.bin", "wb");
-	unscramout = fopen("unscramout.bin", "wb");
+	if (argc == 8) {
+		scramout = fopen(argv[6], "wb");
+		unscramout = fopen(argv[7], "wb");
+	} else {
+		scramout = fopen("scramout.bin", "wb");
+		unscramout = fopen("unscramout.bin", "wb");
+	}
+
+	// Set correction boolean.
+	if ((strcmp(argv[5], "1")) == 0) {
+		doCorrection = true;
+	} else if ((strcmp(argv[5], "0")) == 0) {
+		doCorrection = false;
+	}
+	
+	// Set mode boolean.
+	bool mode;
+	if ((strcmp(argv[4], "1")) == 0) {
+		mode = true;
+	} else if ((strcmp(argv[4], "0")) == 0) {
+		mode = false;
+	}
 
 	while (sector < endsector) { // Loop: while there are still more sectors to read.
-		if (!ReadCD(cdFileDesc, (argc > 4))) { // Conditional: If ReadCD() was not successful.
+		if (!ReadCD(cdFileDesc, mode)) { // Conditional: If ReadCD() was not successful.
 			// This appears to want to flush the cache. I need to look into how this works.
 			//long offset = rand() % 6;
 			//offset *= (rand() % 2 ? -1 : 1);
