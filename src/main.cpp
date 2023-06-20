@@ -58,6 +58,7 @@
 #include <linux/cdrom.h>
 #include <sys/ioctl.h>
 #include <limits.h>
+#include "../include/correlator.hpp"
 
 // Lazy globals
 long sector;
@@ -67,7 +68,7 @@ FILE* unscramout;
 const unsigned int numToRead = 26; // Value from DCDumper
 std::map<int, unsigned int> reads;
 bool seekback = false;
-bool doCorrection;
+int correctionMode;
 // int sectorMode;
 
 // ECC/EDC stuff
@@ -204,31 +205,42 @@ bool GetFromBuffer(long sectorNo) {
 	}
 	
 	if (ecmify(NewBufUnscrambled)) { // Conditional: If ecmify() reports that the sector is bad.
-		if (doCorrection == true) {
-			// Sector repair logic can go here. Not implemented yet.
-			int k = 0;
-			while(k < 50) {
-				printf("Error. Need to fix sector %ld. Tried %u times.\n", sector, reads[sector]);
-				rsDecode(NewBufUnscrambled);
-				if(!ecmify(NewBufUnscrambled)) {
+		if (correctionMode) { // Are we actually correcting data?
+			// Sector repair logic can go here. Fully implemented!
+			Correlator* c = new Correlator; // Correlator object for corrections type 2 and 3.
+			int k = 0; // Iteration.
+			while(k < 2500) { // Run over this 2500 times, RS gets run everytime in mode 1 and 3. Correlation gets used every 50 times in mode 2 and 3.
+				if(correctionMode == 3) { printf("Error. Need to fix sector %ld. Tried %u times.\n", sector, reads[sector]); } // If we're doing full correction, this will tell the user how many times we've tried.
+				if((k+1)%50==0 && (correctionMode == 2 || correctionMode == 3)) { c->addRead(NewBufUnscrambled, k/50); } // Adds a read to the correlator every 50 times.
+				if(correctionMode == 1 || correctionMode == 3) { // If we're doing any RS...do RS checking.
+					rsDecode(NewBufUnscrambled); 
+					if(correctionMode == 1) { k=2499; }
+				}
+				if(!ecmify(NewBufUnscrambled)) { // If we've fixed it at this point, hoorah! Just return and move on.
 					printf("Successfully fixed!\n");
 					break;
-				} else {
-					printf("Re-reading the broken sector.\n");
-					if(FlushCache()) {
-					
-					}
-					PassToBuffer(sector, sector + (numToRead - 4));
-					for (int l = 0; l < 2352; l++) { // Loop: for every piece of data in scrambled_table
-						NewBufUnscrambled[l] = NewBuf[l] ^ scrambled_table[l];
-					}
+				} else if(correctionMode == 2 || correctionMode == 3) { // Otherwise, if we're doing correlation, run FlushCache to do a re-read. (Every 50 times, the cache gets completely flushed, and we will store it as a read again.)
+						printf("Re-reading the broken sector.\n");
+						FlushCache();
+						PassToBuffer(sector, sector + (numToRead - 4));
+						for (int l = 0; l < 2352; l++) { // Loop: for every piece of data in scrambled_table
+							NewBufUnscrambled[l] = NewBuf[l] ^ scrambled_table[l];
+						}
 				} 
-				if(ecmify(NewBufUnscrambled) && k == 49) {
+				if(ecmify(NewBufUnscrambled) && k == 2499) { // If we've tried basically everything and nothing worked, give up.
 					printf("Failed to fix.\n");
 				}
 				k++;
 			}
-		} else {
+			if(ecmify(NewBufUnscrambled) && (correctionMode == 2 || correctionMode == 3)) { // Make a good guess using the correlation data we got before, if we're in mode 2 or 3.
+				printf("Comparing all reading, and picking the most consistent values.");
+				c->correlate();
+				for(int w = 0; w < 2352; w++) {
+					NewBufUnscrambled[w] = c->correctArray[w];
+				}
+			}
+			delete c; // Clear our memory.
+		} else { // If we've been told not to do any correction at all.
 			printf("Not performing correction.");
 		}
 	}
@@ -346,11 +358,10 @@ bool FlushCache()
 		sgio.dxfer_direction = SG_DXFER_FROM_DEV;
 		sgio.dxferp = (void*) &DataBuf; 
 		sgio.timeout = 60000;
-
-		if (reads[sector] + 1 % 50 == 0) { // Conditional
+		if ((reads[sector] + 1) % 50 == 0) { // Conditional
 			// CDB with values for ReadCD CDB12 command.  The values were taken from MMC1 draft paper.
 			printf("Seeking back to zero for cache flush\n");
-			CMD[0] = 0x10;						// Code for ReadCD CDB12 command; Value of 0xBE was in original comment
+			CMD[0] = 0xBE;						// Code for ReadCD CDB12 command; Value of 0xBE was in original comment
 			CMD[1] = 0;						// Alternate value of 0 was in original comment
 			CMD[2] = 0;						// Most significant byte of:
 			CMD[3] = 0;						// 3rd byte of:
@@ -392,7 +403,6 @@ bool FlushCache()
 		success = ioctl(cdFileDesc, SG_IO, &sgio); // Send the command to drive
 		if (success != -1) { // Conditional: If the cache was cleared.
 			reads[sector]++;
-			printf("Cleared cache\n");
 		}
 		else { // Any other condition.
 			printf("ioctl() with SG_IO command failed.\n");
@@ -414,14 +424,14 @@ void Usage() {
 		"<first sector number> - the first sector to read from disc\n"
 		"<last sector number> - the last sector to read from disc\n"
 		"<mode> - 0 for 0xD8 mode, 1 for 0xBE mode\n"
-		"<correction> - 1 to perform correction, 0 to not\n"
+		"<correction> - See below\n"
 		"scrambled output - file to output scrambled data to; if used, unscrambled output must be included as well\n"
 		"unscrambled output - file to output unscrambled data to; if used, scrambled output must be included as well\n"
-		"\nFuture usage of <correction>: (NOT CURRENTLY IMPLEMENTED)\n"
+		"\nUsage of <correction>:\n"
 		"0 - do not perform any correction\n"
 		"1 - perform correction type 1 (Reed Solomon ECC with multiple re-read attempts)\n"
-		"2 - perform re-read correction (Re-read an errored sector 100 times and check for correlation between reads)\n"
-		"3 - full correction (RS ECC, and store re-reads to correlate on failure)\n");
+		"2 - perform re-read correction (Re-read an errored sector 50 times and check for correlation between reads)\n"
+		"3 - full correction (RS ECC, and store re-reads to correlate on failure of RS)\n");
 	return;
 }
 
@@ -433,7 +443,11 @@ void Usage() {
 	// argv[2] - the first sector number to read
 	// argv[3] - the last sector number to read
 	// argv[4] - Enable 0xBE mode?
-	// argv[5] - Perform error correction?
+	// argv[5] - Which type of error correction?
+		// 0 - no
+		// 1 - type 1 (just RSPC)
+		// 2 - type 2 (just re-reading; takes awhile)
+		// 3 - full (both; takes a long while)
 	// argv[6] - Optional; File to output scrambled data to.
 	// argv[7] - Optional; File to output unscrambled data to.
 // -> return - Always return 0 to say the program did it's thing.
@@ -466,10 +480,17 @@ int main(int argc, char* argv[]) {
 	}
 
 	// Set correction boolean.
-	if ((strcmp(argv[5], "1")) == 0) {
-		doCorrection = true;
+	if ((strcmp(argv[5], "3")) == 0) {
+		correctionMode = 3;
+	} else if ((strcmp(argv[5], "2")) == 0) {
+		correctionMode = 2;
+	} else if ((strcmp(argv[5], "1")) == 0) {
+		correctionMode = 1;
 	} else if ((strcmp(argv[5], "0")) == 0) {
-		doCorrection = false;
+		correctionMode = 0;
+	} else {
+		printf("No valid value given, setting correction mode to 0.");
+		correctionMode = 0;
 	}
 	
 	// Set mode boolean.

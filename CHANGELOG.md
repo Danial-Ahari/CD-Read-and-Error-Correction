@@ -94,3 +94,7 @@ Todo next:
 
 - Use re-reads to look for the most accurate bytes we believe exist on the disc, by using correlation between different re-reads.
 - Implement different choices of correction (RS, Re-read, Full) in the user interface
+
+### June 20th 14:30
+
+Today I implemented a way to check for consistency across multiple reads, and implemented the customizability in how we recover errors that I intend to from the command line. Other than that, no major changes. Tests are still showing accurate results, but the advantage of this system over CD drives is questionable. I have been looking into reading more exotic types of data, such as subchannel data, and will be working on that.

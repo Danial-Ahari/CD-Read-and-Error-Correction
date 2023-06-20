@@ -22,21 +22,21 @@ Host-based CD-ROM Data Recovery
 
 ## Usage
 
-```Usage: readcd <device file> <first sector number> <last sector number> <mode> <correction> [scrambled output] [unscrambled output]  
+`Usage: readcd <device file> <first sector number> <last sector number> <mode> <correction> [scrambled output] [unscrambled output]  
   
 		<device file> - path to the device file, ex. /dev/sr0  
 		<first sector number> - the first sector to read from disc  
 		<last sector number> - the last sector to read from disc  
 		<mode> - 0 for 0xD8 mode, 1 for 0xBE mode  
-		<correction> - 1 to perform correction, 0 to not  
+		<correction> - See below
 		scrambled output - file to output scrambled data to; if used, unscrambled output must be included as well  
 		unscrambled output - file to output unscrambled data to; if used, scrambled output must be included as well
 		
-		Future usage of <correction>: (NOT CURRENTLY IMPLEMENTED)
+		Usage of <correction>:
 		0 - do not perform any correction
 		1 - perform correction type 1 (Reed Solomon ECC with multiple re-read attempts)
-		2 - perform re-read correction (Re-read an errored sector 100 times and check for correlation between reads)
-		3 - full correction (RS ECC, and store re-reads to correlate on failure)```
+		2 - perform re-read correction (Re-read an errored sector 50 times and check for correlation between reads)
+		3 - full correction (RS ECC, and store re-reads to correlate on failure)`
 
 ## Changelog
 
