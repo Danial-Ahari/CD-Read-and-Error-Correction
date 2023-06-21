@@ -22,7 +22,7 @@ Host-based CD-ROM Data Recovery
 
 ## Usage
 
-`Usage: readcd <device file> <first sector number> <last sector number> <mode> <correction> [scrambled output] [unscrambled output]  
+`Usage: readcd <device file> <first sector number> <last sector number> <mode> correction> [scrambled output] [unscrambled output]`
   
 		<device file> - path to the device file, ex. /dev/sr0  
 		<first sector number> - the first sector to read from disc  
