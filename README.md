@@ -22,7 +22,6 @@ Host-based CD-ROM Data Recovery
 
 ## Usage
 
-<<<<<<< HEAD
 `Usage: readcd <device file> <first sector number> <last sector number> <mode> <correction> [scrambled output] [unscrambled output]  
   
 		<device file> - path to the device file, ex. /dev/sr0  
@@ -31,16 +30,6 @@ Host-based CD-ROM Data Recovery
 		<mode> - 0 for 0xD8 mode, 1 for 0xBE mode  
 		<correction> - See below
 		scrambled output - file to output scrambled data to; if used, unscrambled output must be included as well  
-=======
-	Usage: readcd <device file> <first sector number> <last sector number> <mode> <correction> [scrambled output] [unscrambled output]
-		<device file> - path to the device file, ex. /dev/sr0
-		<first sector number> - the first sector to read from disc
-		<last sector number> - the last sector to read from disc
-		<mode> - 0 for 0xD8 mode, 1 for 0xBE mode
-		<correction> - 1 to perform correction, 0 to not
-		scrambled output - file to output scrambled data to; if used, unscrambled output must be included as well
->>>>>>> a81971022dee773607d11417beb252858a1f0e48
-		unscrambled output - file to output unscrambled data to; if used, scrambled output must be included as well
 		
 		Usage of <correction>:
 		0 - do not perform any correction

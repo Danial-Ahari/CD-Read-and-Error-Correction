@@ -209,7 +209,7 @@ bool GetFromBuffer(long sectorNo) {
 			// Sector repair logic can go here. Fully implemented!
 			Correlator* c = new Correlator; // Correlator object for corrections type 2 and 3.
 			int k = 0; // Iteration.
-			while(k < 2500) { // Run over this 2500 times, RS gets run everytime in mode 1 and 3. Correlation gets used every 50 times in mode 2 and 3.
+			while(k < 2500) { // Run over this 2500 times, RS gets run once in mode 1, and every time in mode 3. Correlation gets used every 50 times in mode 2 and 3.
 				if(correctionMode == 3) { printf("Error. Need to fix sector %ld. Tried %u times.\n", sector, reads[sector]); } // If we're doing full correction, this will tell the user how many times we've tried.
 				if((k+1)%50==0 && (correctionMode == 2 || correctionMode == 3)) { c->addRead(NewBufUnscrambled, k/50); } // Adds a read to the correlator every 50 times.
 				if(correctionMode == 1 || correctionMode == 3) { // If we're doing any RS...do RS checking.
@@ -229,6 +229,7 @@ bool GetFromBuffer(long sectorNo) {
 				} 
 				if(ecmify(NewBufUnscrambled) && k == 2499) { // If we've tried basically everything and nothing worked, give up.
 					printf("Failed to fix.\n");
+					break;
 				}
 				k++;
 			}
@@ -295,7 +296,7 @@ bool ReadCD(int cdFileDesc, bool mode = false) {
 			CMD[7] = 0;  						// Most significant byte of...
 			CMD[8] = 0;  						// Middle byte of...
 			CMD[9] = (uint8_t)numToRead; 				// Least sig byte of no. of sectors to read from CD
-			CMD[10] = 0;
+			CMD[10] = 0b001;
 			CMD[11] = 0;
 			CMD[12] = 0;
 			CMD[13] = 0;
@@ -314,7 +315,7 @@ bool ReadCD(int cdFileDesc, bool mode = false) {
 			CMD[7] = 0;						// Middle byte of...
 			CMD[8] = (uint8_t)numToRead;				// Least sig byte of no. of sectors to read from CD
 			CMD[9] = 0xF8;
-			CMD[10] = 0;
+			CMD[10] = 0; // A value of 0b001 here should make it so we get subchannel data. 
 			CMD[11] = 0;
 			CMD[12] = 0;
 			CMD[13] = 0;
