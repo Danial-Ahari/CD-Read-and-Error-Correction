@@ -14,7 +14,7 @@ int8_t ecmify(uint8_t* sector);
 // <- Buf - uint8_t pointer to the buffer
 // -> return - a short/word containing the parity word
 unsigned short getPParityWord(int m, int n, uint8_t* Buf) {
-	return (Buf[2*(43*m+n)+13] << 8) | Buf[2*(43*m+n)+12];
+	return ((unsigned short)Buf[2*(43*m+n)+13] << 8) | (unsigned char)Buf[2*(43*m+n)+12];
 }
 
 // Function getQParityWordinclude
@@ -25,31 +25,29 @@ unsigned short getPParityWord(int m, int n, uint8_t* Buf) {
 // <- Buf - uint8_t pointer to the buffer
 // -> return - a short/word containing the parity word
 unsigned short getQParityWord(int m, int n, uint8_t* Buf) {
-	return (Buf[2*((44*m+43*n)%1118)+13] << 8) | Buf[2*((44*m+43*n)%1118)+12];
+	return ((unsigned short)Buf[2*((44*m+43*n)%1118)+13] << 8) | (unsigned char)Buf[2*((44*m+43*n)%1118)+12];
 }
 
 // Function putPParityWord
 // Puts the values from a repaired P parity back into the buffer.
-// <- matrix[m][n] - an matrix array containing the words; I want this to be a short, but
-// the library wants integers or characters, and integers work better.
+// <- matrix[m][n] - an short matrix containing the words
 // <- m - integer containing M_p
 // <- n - integer containing N_p
 // <- Buf - uint8_t pointer to the buffer.
-void putPParityWord(int matrix[43][26], int m, int n, uint8_t* Buf) {
-	Buf[2*(43*m+n)+12] = (matrix[m][n] >> 8) & 0xFF;
-	Buf[2*(43*m+n)+13] = (matrix[m][n] >> 8) & 0xFF;
+void putPParityWord(unsigned short matrix[43][26], int m, int n, uint8_t* Buf) {
+	Buf[2*(43*m+n)+12] = matrix[m][n] | 0x0F;
+	Buf[2*(43*m+n)+13] = (matrix[m][n] >> 8) & 0x0F;
 }
 
 // Function putQParityWord
 // Puts the values from a repaired Q parity back into the buffer.
-// <- matrix[m][n] - an integer matrix containing the words; I want this to be a short, but
-// the library wants integers or characters, and integers work better.
+// <- matrix[m][n] - a short matrix containing the words
 // <- m - integer containing M_q
 // <- n - integer containing N_q
 // <- Buf - uint8_t pointer to the buffer.
-void putQParityWord(int matrix[26][45], int m, int n, uint8_t* Buf) {
-	Buf[2*((44*m+43*n)%1118)+12] = (matrix[m][n] >> 8) & 0xFF;
-	Buf[2*((44*m+43*n)%1118)+13] = (matrix[m][n] >> 8) & 0xFF;
+void putQParityWord(unsigned short matrix[26][45], int m, int n, uint8_t* Buf) {
+	Buf[2*((44*m+43*n)%1118)+12] = matrix[m][n] | 0x0F;
+	Buf[2*((44*m+43*n)%1118)+13] = (matrix[m][n] >> 8) & 0x0F;
 }
 
 // Function rsDecode
@@ -58,10 +56,10 @@ void putQParityWord(int matrix[26][45], int m, int n, uint8_t* Buf) {
 int rsDecode(uint8_t* Buf) {
 	// Set up our matrices
 	printf("Making matrices.\n");
-	int pParityMatrix[43][26];
-	int pParityMatrixRepaired[43][26];
-	int qParityMatrix[26][45];
-	int qParityMatrixRepaired[26][45];
+	unsigned short pParityMatrix[43][26];
+	unsigned short pParityMatrixRepaired[43][26];
+	unsigned short qParityMatrix[26][45];
+	unsigned short qParityMatrixRepaired[26][45];
 	
 	int pResult, qResult;
 	int i = 0;
@@ -84,6 +82,7 @@ int rsDecode(uint8_t* Buf) {
 			qParityMatrix[n][44] = (Buf[2*(44*26+n)+13] << 8) | Buf[2*((44*26+n))+12];
 		}
 		printf("Decoding and fixing.\n");
+		
 		for(int j=0; j < 43; j++) {
 			pResult = p_rs_decoder.Decode(pParityMatrix[j], pParityMatrixRepaired[j]);
 		}
@@ -91,6 +90,7 @@ int rsDecode(uint8_t* Buf) {
 		for(int j=0; j < 26; j++) {
 			qResult = q_rs_decoder.Decode(qParityMatrix[j], qParityMatrixRepaired[j]);
 		}
+		
 
 		printf("Pushing back to buffer.\n");
 		for(int n=0; n < 43; n++) {

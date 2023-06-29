@@ -6,7 +6,7 @@ SRC_FILES := $(wildcard $(SRC_DIR)/*.cpp)
 DEPS := $(wildcard $(INCL_DIR)/*.hpp)
 
 readcd: $(SRC_FILES) $(DEPS)
-	g++ $(SRC_FILES) -o $@
+	g++ $(SRC_FILES) $(DEPS) -o $@
 	
 clean:
 	rm -f readcd scramout.bin unscramout.bin
