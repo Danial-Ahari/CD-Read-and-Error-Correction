@@ -102,3 +102,7 @@ Today I implemented a way to check for consistency across multiple reads, and im
 ### June 21st 16:20
 
 Changed almost nothing. Today was mostly research, brainstorming, etc. and testing. I did however change main.cpp to include a comment that lets me switch between getting subchannel data and not getting subchannel data. That's relevant to further things we might do with this. Also fixed README formatting issues.
+
+### July 3rd 15:05
+
+Minor changes (e.g. not bitshifting directly in the buffer, but instead making a copy of the data first; not moving the "repaired" data back unless we're sure it's repaired, etc.) while I tried to find out what's wrong with it. Turns out, we're having read issues. The next update will probably be when I've fixed that.

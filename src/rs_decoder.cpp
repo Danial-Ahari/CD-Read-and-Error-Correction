@@ -14,7 +14,9 @@ int8_t ecmify(uint8_t* sector);
 // <- Buf - uint8_t pointer to the buffer
 // -> return - a short/word containing the parity word
 unsigned short getPParityWord(int m, int n, uint8_t* Buf) {
-	return ((unsigned short)Buf[2*(43*m+n)+13] << 8) | (unsigned char)Buf[2*(43*m+n)+12];
+	int first = Buf[2*(43*m+n)+13];
+	int second = Buf[2*(43*m+n)+12];
+	return ((unsigned short)first << 8) | (unsigned short)second;
 }
 
 // Function getQParityWordinclude
@@ -25,7 +27,9 @@ unsigned short getPParityWord(int m, int n, uint8_t* Buf) {
 // <- Buf - uint8_t pointer to the buffer
 // -> return - a short/word containing the parity word
 unsigned short getQParityWord(int m, int n, uint8_t* Buf) {
-	return ((unsigned short)Buf[2*((44*m+43*n)%1118)+13] << 8) | (unsigned char)Buf[2*((44*m+43*n)%1118)+12];
+	int first = Buf[2*((44*m+43*n)%1118)+13];
+	int second = Buf[2*((44*m+43*n)%1118)+12];
+	return ((unsigned short)first << 8) | (unsigned short)second;
 }
 
 // Function putPParityWord
@@ -35,8 +39,8 @@ unsigned short getQParityWord(int m, int n, uint8_t* Buf) {
 // <- n - integer containing N_p
 // <- Buf - uint8_t pointer to the buffer.
 void putPParityWord(unsigned short matrix[43][26], int m, int n, uint8_t* Buf) {
-	Buf[2*(43*m+n)+12] = matrix[m][n] | 0x0F;
-	Buf[2*(43*m+n)+13] = (matrix[m][n] >> 8) & 0x0F;
+	Buf[2*(43*m+n)+12] = matrix[m][n] | 0x00FF;
+	Buf[2*(43*m+n)+13] = (matrix[m][n] >> 8) & 0x00FF;
 }
 
 // Function putQParityWord
@@ -46,8 +50,8 @@ void putPParityWord(unsigned short matrix[43][26], int m, int n, uint8_t* Buf) {
 // <- n - integer containing N_q
 // <- Buf - uint8_t pointer to the buffer.
 void putQParityWord(unsigned short matrix[26][45], int m, int n, uint8_t* Buf) {
-	Buf[2*((44*m+43*n)%1118)+12] = matrix[m][n] | 0x0F;
-	Buf[2*((44*m+43*n)%1118)+13] = (matrix[m][n] >> 8) & 0x0F;
+	Buf[2*((44*m+43*n)%1118)+12] = matrix[m][n] | 0x00FF;
+	Buf[2*((44*m+43*n)%1118)+13] = (matrix[m][n] >> 8) & 0x00FF;
 }
 
 // Function rsDecode
@@ -95,13 +99,17 @@ int rsDecode(uint8_t* Buf) {
 		printf("Pushing back to buffer.\n");
 		for(int n=0; n < 43; n++) {
 			for(int m=0; m < 24; m++) {
-				putPParityWord(pParityMatrixRepaired, m, n, Buf);
+				if(pResult) {
+					putPParityWord(pParityMatrixRepaired, m, n, Buf);
+				}
 			}
 		}
 		
 		for(int n=0; n < 26; n++) {
 			for(int m=0; m < 43; m++) {
-				putQParityWord(qParityMatrixRepaired, m, n, Buf);
+				if(!qResult) {
+					putQParityWord(qParityMatrixRepaired, m, n, Buf);
+				}
 			}
 		}
 		if(!ecmify(Buf)) {
