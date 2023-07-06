@@ -14,7 +14,7 @@ Part of a project on Host-based CD-ROM Data Recovery
 
 - Clone source code or download ZIP file and extract to a folder.
 
-`git clone https://github.com/Danial-Ahari/RCEU-2023.git`
+`git clone https://github.com/Danial-Ahari/CD-Read-and-Error-Correction.git`
 
 - Enter folder and run make.
 
