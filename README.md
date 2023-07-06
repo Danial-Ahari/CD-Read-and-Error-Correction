@@ -1,5 +1,5 @@
-# RCEU-2023
-Host-based CD-ROM Data Recovery
+# CD Read and Error Correction
+Part of a project on Host-based CD-ROM Data Recovery
 
 ## Acknowledgements
 
