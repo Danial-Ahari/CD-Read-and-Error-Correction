@@ -106,3 +106,7 @@ Changed almost nothing. Today was mostly research, brainstorming, etc. and testi
 ### July 3rd 15:05
 
 Minor changes (e.g. not bitshifting directly in the buffer, but instead making a copy of the data first; not moving the "repaired" data back unless we're sure it's repaired, etc.) while I tried to find out what's wrong with it. Turns out, we're having read issues. The next update will probably be when I've fixed that.
+
+### July 10th 15:00
+
+I have no idea where to start with this. Basically, I just incorporated a way to view sense data that's moderately human readable and also made a new calculation for how many sectors we should try to read toward the end of a given disc. I also did a lot of tests, and frankly, their results are concerningly unpredictable. I think the main cause of this might be copy protections used on the discs in question though. I'm still fiddling with it, but this is currently working, which most of the intermediate steps from last push and this weren't. So I'm pushing this now.

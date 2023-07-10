@@ -59,6 +59,7 @@
 #include <sys/ioctl.h>
 #include <limits.h>
 #include "../include/correlator.hpp"
+#include <iostream>
 
 // Lazy globals
 long sector;
@@ -182,6 +183,9 @@ bool PassToBuffer(long first, long last) {
 				offset += 2200; // Jump ahead, but don't jump all the way to the place we expect the next header -- sometimes crazy things happen with changing offsets
 				continue;
 			}
+			if (foundSector > sector) {
+				return false;
+			}
 		}
 	}
 	return true; // Always return true?
@@ -270,15 +274,24 @@ bool GetFromBuffer(long sectorNo) {
 bool ReadCD(int cdFileDesc, bool mode = false) {
 	int success; // Create an int to store the response from ioctl(), successful if greater than or equal to 0
 	long sectorM2 = sector - 2; // Sector minus 2.
+	int readLength;
 	
 	if (GetFromBuffer(sector)) return true; // If this sector is in the buffer, do not read.
 
 	if (cdFileDesc != -1) { // Conditional: If we don't have a bad file descriptor.
+	
+		if(endsector-sector < numToRead) {
+			readLength = endsector-sector;
+		} else {
+			readLength = numToRead;
+		}
 		unsigned char CMD[15]; // This array will store the command.
+		unsigned char sense[128];
 		
 		sgio.interface_id = 'S'; // Linux identifies all SCSI devices (at the moment) as 'S'
-		sgio.sbp = NULL; // This line and the next have to do with sense data. We don't need that at the moment.
-		sgio.mx_sb_len = 0;
+		sgio.sbp = sense;
+		memset(sense, 0, sizeof(sense));
+   		sgio.mx_sb_len = sizeof(sense);
 		sgio.dxfer_len = 2352 * numToRead; // How many sectors we want to read.
 		sgio.dxfer_direction = SG_DXFER_FROM_DEV; // Designates that we want to read data from the device.
 		sgio.dxferp = (void*) &DataBuf; // Tells it that we want our data in DataBuf
@@ -295,7 +308,7 @@ bool ReadCD(int cdFileDesc, bool mode = false) {
 			CMD[6] = 0;
 			CMD[7] = 0;  						// Most significant byte of...
 			CMD[8] = 0;  						// Middle byte of...
-			CMD[9] = (uint8_t)numToRead; 				// Least sig byte of no. of sectors to read from CD
+			CMD[9] = (uint8_t)readLength; 				// Least sig byte of no. of sectors to read from CD
 			CMD[10] = 0;
 			CMD[11] = 0;
 			CMD[12] = 0;
@@ -313,7 +326,7 @@ bool ReadCD(int cdFileDesc, bool mode = false) {
 			CMD[5] = (uint8_t)(sectorM2 & 0xFF);			// Set Start Sector
 			CMD[6] = 0; 						// Most significant byte of...
 			CMD[7] = 0;						// Middle byte of...
-			CMD[8] = (uint8_t)numToRead;				// Least sig byte of no. of sectors to read from CD
+			CMD[8] = (uint8_t)readLength;				// Least sig byte of no. of sectors to read from CD
 			CMD[9] = 0xF8;
 			CMD[10] = 0; // A value of 0b001 here should make it so we get subchannel data. 
 			CMD[11] = 0;
@@ -328,10 +341,24 @@ bool ReadCD(int cdFileDesc, bool mode = false) {
 		
 		success = ioctl(cdFileDesc, SG_IO, &sgio); // Send the command to the drive
 		
-		if (success != -1) { // Conditional: If we succeed.
+		if(sense[0]) {
+			int reset = ioctl(cdFileDesc, SG_SCSI_RESET, 1);
+			std::cout << "Hard resetting.\n";
+			if (reset != 0) { std::cout << "Fail." << '\n'; }
+			return 0;
+		}
+		
+		if (success > -1) { // Conditional: If we succeed.
+			if(sense[0]) {
+				for (int i = 0; i < 18; i++) {
+					std::cout << std::hex << (int)sense[i] << '\n';
+				}
+				std::cout << '\n';
+			}
 			reads[sector]++;
-			PassToBuffer(sector, sector + (numToRead - 4));
-			return GetFromBuffer(sector);
+			if(PassToBuffer(sector, sector + (numToRead - 4))) {
+				return GetFromBuffer(sector);
+			}
 		}
 		
 		else { // Any other condition.
@@ -349,8 +376,18 @@ bool ReadCD(int cdFileDesc, bool mode = false) {
 // -> return - bool that is 1 when successful
 bool FlushCache()
 {
+	int readLength;
 	int success; // Create an int to store the response from ioctl(), successful if greater than or equal to 0
 	if (cdFileDesc != -1) { // Conditional: If we don't have a bad file descriptor.
+	
+		if(endsector-sector < numToRead) {
+			readLength = endsector-sector;
+			if(readLength < 1) {
+				readLength = 1;
+			}
+		} else {
+			readLength = numToRead;
+		}
 		unsigned char CMD[15];
 		sgio.interface_id = 'S';
 		sgio.sbp = NULL;
@@ -388,7 +425,7 @@ bool FlushCache()
 			CMD[5] = (uint8_t)((sector-2) & 0xFF);			// Set Start Sector
 			CMD[6] = 0;
 			CMD[7] = 0;						// Most significant byte of...
-			CMD[8] = (uint8_t)numToRead;						// Middle byte of...
+			CMD[8] = (uint8_t)readLength;						// Middle byte of...
 			CMD[9] = 0xF8;						// Least sig byte of no. of sectors to read from CD
 			CMD[10] = 0;
 			CMD[11] = 0;
@@ -401,7 +438,7 @@ bool FlushCache()
 		sgio.cmdp = CMD;
 		sgio.cmd_len = sizeof(CMD);
 
-		success = ioctl(cdFileDesc, SG_IO, &sgio); // Send the command to drive
+		success = ioctl(cdFileDesc, SG_IO, &sgio); // Send the command to drive		
 		if (success != -1) { // Conditional: If the cache was cleared.
 			reads[sector]++;
 		}
