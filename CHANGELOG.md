@@ -110,3 +110,7 @@ Minor changes (e.g. not bitshifting directly in the buffer, but instead making a
 ### July 10th 15:00
 
 I have no idea where to start with this. Basically, I just incorporated a way to view sense data that's moderately human readable and also made a new calculation for how many sectors we should try to read toward the end of a given disc. I also did a lot of tests, and frankly, their results are concerningly unpredictable. I think the main cause of this might be copy protections used on the discs in question though. I'm still fiddling with it, but this is currently working, which most of the intermediate steps from last push and this weren't. So I'm pushing this now.
+
+### July 12th 11:40
+
+Mostly just more tweaking, and implementing a different way of handling what seem to be read errors.

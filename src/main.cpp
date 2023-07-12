@@ -70,7 +70,9 @@ const unsigned int numToRead = 26; // Value from DCDumper
 std::map<int, unsigned int> reads;
 bool seekback = false;
 int correctionMode;
+int lookThrough = 0;
 // int sectorMode;
+bool emergencyMode = 0;
 
 // ECC/EDC stuff
 int8_t ecmify(uint8_t* sector);
@@ -86,8 +88,7 @@ bool CloseVolume(int cdFileDesc);
 bool ReadCD(int cdFileDesc);
 int rsDecode(uint8_t* Buf);
 bool FlushCache();
-
-// ntddscsi.h defines that used to be here no longer needed.
+void emptyBuffer();
 
 // Global variables
 struct sg_io_hdr sgio; // Struct that will contain all the sgio data we need.
@@ -129,15 +130,27 @@ static long bufferStartOffset = 0;
 // -> return - a bool that uhh...just seems to return true. We'll see if we ever need this for error handling.
 bool PassToBuffer(long first, long last) {
 	// Check if there's a sync in the data we got and see if it's where we expected it to be.
-	for (int offset = 0; offset < 2352 * (numToRead - 1); offset++) {		// Loop: for all offsets between 0 and 2351 inclusive
+	for (int offset = 0; offset < 2352 * (numToRead - 1); offset++) {		// Loop: for all offsets between 0 and 2351 * (numToRead - 1) inclusive
 	
 		// printf("Searching for data sector\n"); 					// Notify that we are looking for data.
 		uint8_t* SectorData = &(DataBuf[offset]);				// Put the data from our buffer into an array to work with.
 		
-		if (SectorData[0x000] == 0x00 &&
-			SectorData[0x001] == 0xFF && SectorData[0x002] == 0xFF && SectorData[0x003] == 0xFF && SectorData[0x004] == 0xFF &&
-			SectorData[0x005] == 0xFF && SectorData[0x006] == 0xFF && SectorData[0x007] == 0xFF && SectorData[0x008] == 0xFF &&
-			SectorData[0x009] == 0xFF && SectorData[0x00A] == 0xFF && SectorData[0x00B] == 0x00 ) { // Conditional: Did we find a sync?
+		int syncFound = 0;
+		
+		if (SectorData[0x000] == 0x00) { syncFound++; }
+		if (SectorData[0x001] == 0xFF) { syncFound++; }
+		if (SectorData[0x002] == 0xFF) { syncFound++; }
+		if (SectorData[0x003] == 0xFF) { syncFound++; }
+		if (SectorData[0x004] == 0xFF) { syncFound++; }
+		if (SectorData[0x005] == 0xFF) { syncFound++; }
+		if (SectorData[0x006] == 0xFF) { syncFound++; }
+		if (SectorData[0x007] == 0xFF) { syncFound++; }
+		if (SectorData[0x008] == 0xFF) { syncFound++; }
+		if (SectorData[0x009] == 0xFF) { syncFound++; }
+		if (SectorData[0x00A] == 0xFF) { syncFound++; }
+		if (SectorData[0x00B] == 0x00) { syncFound++; }
+		
+		if (syncFound == 12) { // Conditional: Did we find at least part of a sync?
 			
 			// Now descramble the sector enough to check the LBA against what we expect
 			uint8_t TempBufUnscrambled[16];					// Temporary buffer for unscrambled data.
@@ -180,15 +193,21 @@ bool PassToBuffer(long first, long last) {
 				break;
 			}
 			if (foundSector < sector) { // Conditional: If the found sector is before the current sector
-				offset += 2200; // Jump ahead, but don't jump all the way to the place we expect the next header -- sometimes crazy things happen with changing offsets
+				 offset += 2000; // Jump ahead, but don't jump all the way to the place we expect the next header -- sometimes crazy things happen with changing offsets
 				continue;
 			}
 			if (foundSector > sector) {
-				return false;
+				if(lookThrough >= 10) {
+					emergencyMode = 1;
+					lookThrough = 0;
+					return false;
+				}
+				lookThrough++;
+				// return false;
 			}
 		}
 	}
-	return true; // Always return true?
+	return true;
 }
 
 // Function GetFromBuffer
@@ -246,7 +265,7 @@ bool GetFromBuffer(long sectorNo) {
 			}
 			delete c; // Clear our memory.
 		} else { // If we've been told not to do any correction at all.
-			printf("Not performing correction.");
+			printf("Not performing correction.\n");
 		}
 	}
 	
@@ -284,6 +303,12 @@ bool ReadCD(int cdFileDesc, bool mode = false) {
 			readLength = endsector-sector;
 		} else {
 			readLength = numToRead;
+		}
+		if(emergencyMode) {
+			readLength = 5;
+			emptyBuffer();
+			FlushCache();
+			emergencyMode = 0;
 		}
 		unsigned char CMD[15]; // This array will store the command.
 		unsigned char sense[128];
@@ -342,7 +367,7 @@ bool ReadCD(int cdFileDesc, bool mode = false) {
 		success = ioctl(cdFileDesc, SG_IO, &sgio); // Send the command to the drive
 		
 		if(sense[0]) {
-			int reset = ioctl(cdFileDesc, SG_SCSI_RESET, 1);
+			int reset = ioctl(cdFileDesc, SG_SCSI_RESET, 3);
 			std::cout << "Hard resetting.\n";
 			if (reset != 0) { std::cout << "Fail." << '\n'; }
 			return 0;
@@ -450,6 +475,12 @@ bool FlushCache()
 	else
 	{
 		return 0;
+	}
+}
+
+void emptyBuffer() {
+	for(int i = 0; i < 2352 * numToRead; i++) {
+		DataBuf[i] = 0;
 	}
 }
 
