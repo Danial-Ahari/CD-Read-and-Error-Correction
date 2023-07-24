@@ -114,3 +114,7 @@ I have no idea where to start with this. Basically, I just incorporated a way to
 ### July 12th 11:40
 
 Mostly just more tweaking, and implementing a different way of handling what seem to be read errors.
+
+### July 24th 13:20
+
+Nothing particularly big was changed, but I'm just keeping up with putting code to the repository, because there are issues I can't find the solutions for, and I'm trying a lot of stuff and need to have a record of what things I'm changing.

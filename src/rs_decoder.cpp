@@ -39,8 +39,10 @@ unsigned short getQParityWord(int m, int n, uint8_t* Buf) {
 // <- n - integer containing N_p
 // <- Buf - uint8_t pointer to the buffer.
 void putPParityWord(unsigned short matrix[43][26], int m, int n, uint8_t* Buf) {
-	Buf[2*(43*m+n)+12] = matrix[m][n] | 0x00FF;
-	Buf[2*(43*m+n)+13] = (matrix[m][n] >> 8) & 0x00FF;
+	// if(matrix[m][n]) {
+		Buf[2*(43*m+n)+12] = matrix[m][n] & 0x00FF;
+		Buf[2*(43*m+n)+13] = (matrix[m][n] >> 8) & 0x00FF;
+	// }
 }
 
 // Function putQParityWord
@@ -50,8 +52,10 @@ void putPParityWord(unsigned short matrix[43][26], int m, int n, uint8_t* Buf) {
 // <- n - integer containing N_q
 // <- Buf - uint8_t pointer to the buffer.
 void putQParityWord(unsigned short matrix[26][45], int m, int n, uint8_t* Buf) {
-	Buf[2*((44*m+43*n)%1118)+12] = matrix[m][n] | 0x00FF;
-	Buf[2*((44*m+43*n)%1118)+13] = (matrix[m][n] >> 8) & 0x00FF;
+	// if(matrix[m][n]) {
+		Buf[2*((44*m+43*n)%1118)+12] = matrix[m][n] & 0x00FF;
+		Buf[2*((44*m+43*n)%1118)+13] = (matrix[m][n] >> 8) & 0x00FF;
+	// }
 }
 
 // Function rsDecode
@@ -64,10 +68,14 @@ int rsDecode(uint8_t* Buf) {
 	unsigned short pParityMatrixRepaired[43][26];
 	unsigned short qParityMatrix[26][45];
 	unsigned short qParityMatrixRepaired[26][45];
+	memset(pParityMatrix, 0, sizeof(pParityMatrix));
+	memset(qParityMatrix, 0, sizeof(pParityMatrix));
+	memset(pParityMatrixRepaired, 0, sizeof(pParityMatrixRepaired));
+	memset(qParityMatrixRepaired, 0, sizeof(qParityMatrixRepaired));
 	
-	int pResult, qResult;
 	int i = 0;
-	while(i < 50) {
+	// while(i < 50) {
+		int pResult, qResult;
 		printf("Making decoders.\n");
 		RS::ReedSolomon<24, 2> p_rs_decoder;
 		RS::ReedSolomon<43, 2> q_rs_decoder;
@@ -96,10 +104,10 @@ int rsDecode(uint8_t* Buf) {
 		}
 		
 
-		printf("Pushing back to buffer.\n");
+		printf("Pushing back to buffer if fixed.\n");
 		for(int n=0; n < 43; n++) {
 			for(int m=0; m < 24; m++) {
-				if(pResult) {
+				if(!pResult) {
 					putPParityWord(pParityMatrixRepaired, m, n, Buf);
 				}
 			}
@@ -112,14 +120,14 @@ int rsDecode(uint8_t* Buf) {
 				}
 			}
 		}
-		if(!ecmify(Buf)) {
+		/*if(!ecmify(Buf)) {
 			break;
 		}
 		if(pResult && qResult) {
 			break;
-		}
+		}*/
 		i++;
-	}
+	// }
 	
 	return 0; // Work out return value later.
 }

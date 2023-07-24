@@ -47,3 +47,5 @@ void make_scrambled_table(void)
 		if (newval == 1) counter |= 0x4000; // ECMA-130 diagram is wrong and shows this as counter |= 0x8000; the text is correct.
 	}
 }
+
+
