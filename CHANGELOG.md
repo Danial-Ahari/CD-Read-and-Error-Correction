@@ -118,3 +118,7 @@ Mostly just more tweaking, and implementing a different way of handling what see
 ### July 24th 13:20
 
 Nothing particularly big was changed, but I'm just keeping up with putting code to the repository, because there are issues I can't find the solutions for, and I'm trying a lot of stuff and need to have a record of what things I'm changing.
+
+### July 24th 14:00
+
+Suddenly realized I was being stupid. Turns out the standard refers to things as words, but says you should process them as bytes. Now that I'm processing things as bytes with my RS code, I think it's working better than it was? Not 100% sure, but hey, it works now. The standalone corrector will be updated accordingly as well.
