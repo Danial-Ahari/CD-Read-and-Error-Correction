@@ -1,8 +1,8 @@
 # CD Read and Error Correction
 Part of a project on Host-based CD-ROM Data Recovery
 
-Find the other parts of the project here:
-[CD Visualizer](https://github.com/Danial-Ahari/CD-Visualizer)
+Find the other parts of the project here:  
+[CD Visualizer](https://github.com/Danial-Ahari/CD-Visualizer)  
 [Standalone Corrector (takes BIN images)](https://github.com/Danial-Ahari/Standalone-BIN-Image-Corrector)
 
 ## Acknowledgements
