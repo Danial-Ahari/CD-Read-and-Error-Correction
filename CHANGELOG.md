@@ -122,3 +122,11 @@ Nothing particularly big was changed, but I'm just keeping up with putting code 
 ### July 24th 14:00
 
 Suddenly realized I was being stupid. Turns out the standard refers to things as words, but says you should process them as bytes. Now that I'm processing things as bytes with my RS code, I think it's working better than it was? Not 100% sure, but hey, it works now. The standalone corrector will be updated accordingly as well.
+
+### July 25th 10:00
+
+Added better licensing information and brought RS decoder up to date with the other project.
+
+### August 1st 14:15
+
+Changed README to show known issues and link to the other parts of the project.

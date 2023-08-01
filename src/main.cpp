@@ -1,17 +1,40 @@
+// CD Reader and Corrector
+// Danial Ahari, mentored by Dr. Jacob Hauenstein
+// The University of Alabama in Huntsville
+// Summer 2023
 //*************************************************************
-//Very crude experiments in reading discs using 0xd8
-//This file is Based on Truman's "ReadCD" IOCTL example
-//(original author information in comment below)
-//The EDC/ECC code (in edccchk.cpp) is based on
-//code from Natalia Portillo (original copyright notice
-//in that source file).
-//The descrambling code is by Jonathan Gevaryahu (taken here
-//from Sarami's DiscImageCreator repository)
+// This project is the main component of a Summer 2023, RCEU
+// conducted at the University of Alabama in Huntsville to
+// recover data from CD-ROMs more effectively, efficiently,
+// and usably, using host-based methods.
+//
+// The code within this document is originally based on Truman/
+// Natalia Portillo's code for reading discs. See comment below.
+//
+// The code contained in edcchk.cpp is based on Natalia
+// Portillo's code that can be found at 
+// https://github.com/claunia/edccchk
+// The licensing information is contained within that file.
+//
+// The code contained in descramble.cpp is by Jonathan
+// Gevaryahu. It is taken here from Sarami's DiscImageCreator
+// which can be found at
+// https://github.com/saramibreak/DiscImageCreator
+// 
+// The code in header files related to rs decoding and the
+// code used instructionally to generate rs_decoder.cpp was made
+// by Mike Lubinets and can be found here:
+// https://github.com/mersinvald/Reed-Solomon
+//
+// Finally, the example used for porting this code to Linux
+// was found on StackOverflow at:
+// https://stackoverflow.com/questions/29884540/how-to-issue-a-read-cd-command-to-a-cd-rom-drive-in-windows
+//
+// Many thanks are given to the people that contributed to
+// projects used here. Without you, none of this would have
+// been possible.
 
-//Porting this to Linux should probably be fairly straightforward. Take a look at
-//https://stackoverflow.com/questions/29884540/how-to-issue-a-read-cd-command-to-a-cd-rom-drive-in-windows
-//(Scroll down -- there's an example read in Linux)
-
+//
 //*************************************************************
 //ReadCD v1.00.
 //28 May 2003.
@@ -86,7 +109,7 @@ void make_scrambled_table(void);
 int OpenVolume(char* cdDeviceFile);
 bool CloseVolume(int cdFileDesc);
 bool ReadCD(int cdFileDesc);
-int rsDecode(uint8_t* Buf);
+void rsDecode(uint8_t* Buf);
 bool FlushCache();
 void emptyBuffer();
 bool syncAssumed = false;
@@ -314,6 +337,7 @@ bool ReadCD(int cdFileDesc, bool mode = false) {
 		} else {
 			readLength = numToRead;
 		}
+		if(readLength < 1) { readLength = 1; }
 		if(emergencyMode) {
 			readLength = 2;
 			emptyBuffer();
@@ -327,7 +351,7 @@ bool ReadCD(int cdFileDesc, bool mode = false) {
 		sgio.sbp = sense;
 		memset(sense, 0, sizeof(sense));
    		sgio.mx_sb_len = sizeof(sense);
-		sgio.dxfer_len = 2352 * numToRead; // How many sectors we want to read.
+		sgio.dxfer_len = 2352 * readLength; // How many sectors we want to read.
 		sgio.dxfer_direction = SG_DXFER_FROM_DEV; // Designates that we want to read data from the device.
 		sgio.dxferp = (void*) &DataBuf; // Tells it that we want our data in DataBuf
 		sgio.timeout = 60000; // SGIO timeout set to 60 seconds.
@@ -420,17 +444,15 @@ bool FlushCache()
 	
 		if(endsector-sector < numToRead) {
 			readLength = endsector-sector;
-			if(readLength < 1) {
-				readLength = 1;
-			}
 		} else {
 			readLength = numToRead;
 		}
+		if(readLength < 1) { readLength = 1; }
 		unsigned char CMD[15];
 		sgio.interface_id = 'S';
 		sgio.sbp = NULL;
 		sgio.mx_sb_len = 0;
-		sgio.dxfer_len = 2352 * numToRead;
+		sgio.dxfer_len = 2352 * readLength;
 		sgio.dxfer_direction = SG_DXFER_FROM_DEV;
 		sgio.dxferp = (void*) &DataBuf; 
 		sgio.timeout = 60000;
